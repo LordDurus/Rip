@@ -92,7 +92,7 @@ This model offers:
 
 4. **Plot results:**
     ```sh
-    python Scripts/plot_rip_field.py
+    python Scripts/plot_all.py
     ```
     The resulting graph will show the average rip field with a shaded envelope across runs.
 
