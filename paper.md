@@ -13,7 +13,7 @@ The standard ΛCDM cosmological model treats dark energy as a cosmological const
 - This rip field mimics dark energy and may naturally flatten over time, aligning with ΛCDM observations.
 
 ## Methodology
-We simulate a toy universe consisting of 1,000 galaxies, each containing a central black hole. At each timestep:
+We simulate a toy universe consisting of 20,000 galaxies, each containing a central black hole. At each timestep:
 
 - Galaxies receive stochastic matter inflow.
 - With some probability, mass falling into a black hole is destroyed rather than absorbed.
@@ -25,7 +25,7 @@ We normalize the resulting field against the current measured dark energy densit
 ### Simulation Parameters
 | Parameter         | Description                               | Value            |
 |------------------|-------------------------------------------|------------------|
-| `NUM_GALAXIES`   | Number of galaxies in simulation          | 1000             |
+| `NUM_GALAXIES`   | Number of galaxies in simulation          | 20,000           |
 | `SIM_DURATION`   | Total simulation time                     | 13,800 Myr       |
 | `TIME_STEP`      | Time step interval                        | 100 Myr          |
 | `INITIAL_MASS`   | Mass of each galaxy (solar masses)        | \(1.0 \times 10^{12}\) |
@@ -49,9 +49,9 @@ Where:
 - Average curve and envelope compared to constant ΛCDM line.
 
 ## Results
-The rip field grows slowly at first, then accelerates and begins to flatten — matching the characteristic shape of cosmological expansion under ΛCDM. The variance across runs is small, and the average closely approaches the redshift-normalized value of dark energy.
+The rip field grows slowly at first, then accelerates and begins to flatten — matching the characteristic shape of cosmological expansion under ΛCDM. The variance across runs is extremely low at 20,000 galaxies, and the average closely matches the redshift-normalized value of dark energy.
 
-![Simulated Rip Field vs ΛCDM](assets/rip_field_vs_lcdm.png)
+![Simulated Rip Field vs ΛCDM](assets/rip_field_20k_galaxies.png)
 
 ## Possible Outcomes for Exiting Matter
 To frame the novelty of this idea, we compare various scenarios that might occur when matter enters a black hole:
@@ -92,7 +92,7 @@ This model offers:
 
 4. **Plot results:**
     ```sh
-    python Scripts/plot_all.py
+    python Scripts/plot_rip_field.py
     ```
     The resulting graph will show the average rip field with a shaded envelope across runs.
 
@@ -101,4 +101,3 @@ MIT License. Contributions welcome.
 
 ## Author Notes
 This project is a conceptual exploration inspired by dissatisfaction with the notion of an unexplained cosmological constant. It is not intended as a formal theory, but as a computational thought experiment — one that seems to be surprisingly well-aligned with current data.
-
