@@ -45,13 +45,18 @@ impl Galaxy {
     }
 
     fn rip_chance(&self, time: usize, rng: &mut ThreadRng) -> bool {
-        let base_chance = 0.0001;
-        let scale = (self.bh_mass / INITIAL_BH_MASS) * (time as f64 / SIM_DURATION as f64);
+        // let base_chance = 0.0001;
+        let base_chance = 0.00009;
+        // let scale = (self.bh_mass / INITIAL_BH_MASS) * (time as f64 / SIM_DURATION as f64);
+        let scale = (self.bh_mass / INITIAL_BH_MASS) * (time as f64 / SIM_DURATION as f64).ln_1p();
+
         rng.gen_bool((base_chance * scale).min(1.0))
     }
 
     fn destroy_mass(&self, mass: f64) -> f64 {
-        mass * 0.5
+        let mut rng = rand::thread_rng();
+        let fraction = rng.gen_range(0.1..=0.5); // Randomize between 10% and 50%
+        mass * fraction
     }
 }
 
