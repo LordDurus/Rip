@@ -16,7 +16,7 @@ const INITIAL_MASS: f64 = 1.0e12;
 const INITIAL_BH_MASS: f64 = 1.0e8;
 
 // Number of galaxies simulated per run
-const NUM_GALAXIES: usize = 20000;
+const NUM_GALAXIES: usize = 1000000;
 
 // Duration of the simulation in million years
 const SIM_DURATION: usize = 13_800;
