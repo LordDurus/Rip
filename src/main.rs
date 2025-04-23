@@ -1,4 +1,6 @@
+use chrono::offset::Local;
 use rand::{prelude::*, rngs::ThreadRng};
+use rayon::prelude::*;
 use std::fs::{File, create_dir_all};
 use std::io::Write;
 use std::path::Path;
@@ -26,6 +28,9 @@ const TIME_STEP: usize = 100;
 
 // Number of independent simulation runs
 const NUM_RUNS: usize = 10;
+
+// -1 for all available cores
+const NUM_CORES: isize = -1;
 
 #[derive(Debug)]
 struct Galaxy {
@@ -78,6 +83,7 @@ fn update_rip_field(global_rip_field: f64, lost_mass: f64) -> f64 {
 }
 
 fn run_simulation(run_index: usize) {
+    let start = std::time::Instant::now();
     let mut rng = thread_rng();
     let mut galaxies: Vec<Galaxy> = (0..NUM_GALAXIES).map(|_| Galaxy::new()).collect();
     let mut global_rip_field: f64 = 0.0;
@@ -100,12 +106,31 @@ fn run_simulation(run_index: usize) {
         }
         writeln!(output, "{},{:.12e}", t, global_rip_field).unwrap();
     }
-    println!("Completed run {} | {}", run_index + 1, filename);
+    let duration = start.elapsed();
+    println!(
+        "Completed run {} in {:?} | {}",
+        run_index + 1,
+        duration,
+        filename
+    );
 }
 
 fn main() {
-    for run in 0..NUM_RUNS {
-        run_simulation(run);
+    let start = std::time::Instant::now();
+    println!("Simulation Started {}", Local::now());
+
+    // If NUM_CORES is -1, use all available threads. Otherwise, set the limit.
+    if NUM_CORES > 0 {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(NUM_CORES as usize)
+            .build_global()
+            .expect("Failed to build thread pool");
     }
-    println!("All {} simulations complete.", NUM_RUNS);
+
+    (0..NUM_RUNS).into_par_iter().for_each(|run| {
+        run_simulation(run);
+    });
+
+    let duration = start.elapsed();
+    println!("Simulated {} runs in {:?}", NUM_RUNS, duration);
 }
