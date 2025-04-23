@@ -95,8 +95,10 @@ fn run_simulation(run_index: usize) {
 
     let filename = format!("data/run_{}.csv", run_index);
     let mut output = File::create(&filename).expect("Failed to create run file");
-    writeln!(output, "time_myr,rip_field").unwrap();
 
+    // Create the data file and run the simulation
+    writeln!(output, "time_myr,rip_field").unwrap();
+    let mut buffer = String::new();
     for t in (0..=SIM_DURATION).step_by(TIME_STEP) {
         for galaxy in &mut galaxies {
             let lost_mass = galaxy.simulate_step(t, &mut rng);
@@ -104,8 +106,10 @@ fn run_simulation(run_index: usize) {
                 global_rip_field = update_rip_field(global_rip_field, lost_mass);
             }
         }
-        writeln!(output, "{},{:.12e}", t, global_rip_field).unwrap();
+        buffer.push_str(&format!("{},{:.12e}\n", t, global_rip_field));
     }
+    write!(output, "{}", buffer).unwrap();
+
     let duration = start.elapsed();
     println!(
         "Completed run {} in {:?} | {}",
