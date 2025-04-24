@@ -1,39 +1,11 @@
+mod magic_numbers;
 use chrono::offset::Local;
+use magic_numbers::*;
 use rand::{prelude::*, rngs::ThreadRng};
 use rayon::prelude::*;
 use std::fs::{File, create_dir_all};
 use std::io::Write;
 use std::path::Path;
-
-// Gravitational constant in m^3 kg^-1 s^-2
-const G: f64 = 6.67430e-11;
-
-// Speed of light in meters per second
-const LIGHT_SPEED: f64 = 3.0e8;
-
-// Total initial mass of each galaxy in solar masses
-const INITIAL_MASS: f64 = 1.0e12;
-
-// Initial mass of the central black hole in each galaxy (solar masses)
-const INITIAL_BH_MASS: f64 = 1.0e8;
-
-// Number of galaxies simulated per run
-const NUM_GALAXIES: usize = 1000000;
-
-// Duration of the simulation in million years
-const SIM_DURATION: usize = 13_800;
-
-// Time step of each simulation update (million years)
-const TIME_STEP: usize = 100;
-
-// Number of independent simulation runs
-const NUM_RUNS: usize = 10;
-
-// -1 for all available cores
-const NUM_CORES: isize = -1;
-
-// 0.01% decay per timestep
-const DECAY_FACTOR: f64 = 0.9999;
 
 #[derive(Debug)]
 struct Galaxy {
