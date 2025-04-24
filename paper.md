@@ -53,6 +53,18 @@ The rip field grows slowly at first, then accelerates and begins to flatten — 
 
 ![Simulated Rip Field vs ΛCDM](assets/rip_field_1M_galaxies.png)
 
+![Rip Field Fit](assets/rip_field_fit.png)
+*Figure X: Fitted exponential model of rip field evolution across time.*
+
+![Overlay of All Rip Field Runs](assets/rip_field_overlay.png)
+*Figure Y: Overlay of all 10 simulation runs showing consistent behavior.*
+
+![Mean and Standard Deviation of Rip Field](assets/rip_field_mean_std.png)
+*Figure Z: Mean rip field with ±1 standard deviation shaded.*
+
+![Growth Rate of Rip Field](assets/rip_field_derivative.png)
+*Figure W: First derivative of the rip field showing rate of growth and stabilization.*
+
 ## Possible Outcomes for Exiting Matter
 To frame the novelty of this idea, we compare various scenarios that might occur when matter enters a black hole:
 
@@ -62,11 +74,6 @@ To frame the novelty of this idea, we compare various scenarios that might occur
 | Ejected into jets    | Preserved         | Local disturbance    | ❌                        |
 | Reemitted (Hawking)  | Minimal loss      | Slow leak            | ❌                        |
 | **Erased by rip**    | **Lost**          | **Tension buildup**  | ✅                        |
-
-This highlights that only permanent erasure produces a net change in gravitational field and thus might contribute to expansion pressure.
-
-![Rip Field Fit](assets/rip_field_fit.png)
-*Figure X: Fitted exponential model of rip field evolution across time.*
 
 ## Implications
 
@@ -118,6 +125,14 @@ This expanded scope elevates the rip field from a dark energy analog to a fundam
     py Scripts/plot_all.py
     ```
     The resulting graph will show the average rip field with a shaded envelope across runs.
+
+    You can also run:
+    ```sh
+    py Scripts/plot_rip_field_overlay.py
+    py Scripts/plot_rip_field_mean_std.py
+    py Scripts/plot_rip_field_derivative.py
+    ```
+    to generate the overlay, mean/stddev, and first derivative plots respectively.
 
 ## License
 MIT License. Contributions welcome.
