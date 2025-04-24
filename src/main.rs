@@ -32,6 +32,9 @@ const NUM_RUNS: usize = 10;
 // -1 for all available cores
 const NUM_CORES: isize = -1;
 
+// 0.01% decay per timestep
+const DECAY_FACTOR: f64 = 0.9999;
+
 #[derive(Debug)]
 struct Galaxy {
     mass: f64,
@@ -79,7 +82,9 @@ impl Galaxy {
 }
 
 fn update_rip_field(global_rip_field: f64, lost_mass: f64) -> f64 {
-    global_rip_field + (lost_mass * G / LIGHT_SPEED.powi(2))
+    let mut updated = global_rip_field + (lost_mass * G / LIGHT_SPEED.powi(2));
+    updated *= DECAY_FACTOR;
+    return updated;
 }
 
 fn run_simulation(run_index: usize) {
@@ -104,6 +109,16 @@ fn run_simulation(run_index: usize) {
             let lost_mass = galaxy.simulate_step(t, &mut rng);
             if lost_mass > 0.0 {
                 global_rip_field = update_rip_field(global_rip_field, lost_mass);
+
+                /*
+                if !global_rip_field.is_finite() || global_rip_field > 1e100 {
+                    println!(
+                        "rip field overflow at time {} Myr in run {} — value: {:.2e}, lost_mass: {:.2e}, bh_mass: {:.2e}",
+                        t, run_index, global_rip_field, lost_mass, galaxy.bh_mass
+                    );
+                    break;
+                }
+                */
             }
         }
         buffer.push_str(&format!("{},{:.12e}\n", t, global_rip_field));
