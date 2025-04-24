@@ -51,7 +51,7 @@ Where:
 ## Results
 The rip field grows slowly at first, then accelerates and begins to flatten — matching the characteristic shape of cosmological expansion under ΛCDM. At 1,000,000 galaxies, the variance across runs becomes negligible, and the average aligns nearly perfectly with the ΛCDM dark energy density.
 
-![Simulated Rip Field vs ΛCDM](assets/rip_field_all_normalized.png)
+![Simulated Rip Field vs ΛCDM](assets/rip_field_1M_galaxies.png)
 
 ![Rip Field Fit](assets/rip_field_fit.png)
 *Figure X: Fitted exponential model of rip field evolution across time.*
@@ -64,6 +64,9 @@ The rip field grows slowly at first, then accelerates and begins to flatten — 
 
 ![Growth Rate of Rip Field](assets/rip_field_derivative.png)
 *Figure W: First derivative of the rip field showing rate of growth and stabilization.*
+
+![Curvature of Rip Field](assets/rip_field_second_derivative.png)
+*Figure V: Second derivative of the rip field showing the acceleration of expansion over time.*
 
 ## Possible Outcomes for Exiting Matter
 To frame the novelty of this idea, we compare various scenarios that might occur when matter enters a black hole:
@@ -131,8 +134,9 @@ This expanded scope elevates the rip field from a dark energy analog to a fundam
     py Scripts/plot_rip_field_overlay.py
     py Scripts/plot_rip_field_mean_std.py
     py Scripts/plot_rip_field_derivative.py
+    py Scripts/plot_rip_field_second_derivative.py
     ```
-    to generate the overlay, mean/stddev, and first derivative plots respectively.
+    to generate the overlay, mean/stddev, first derivative, and second derivative plots respectively.
 
 ## License
 MIT License. Contributions welcome.
