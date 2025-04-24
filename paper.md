@@ -3,6 +3,9 @@
 ## Abstract
 We present a speculative physical model in which dark energy emerges from the gradual destruction of matter and energy by rips in spacetime, potentially located at the cores of supermassive black holes. This mechanism results in a cumulative tension field — the "rip field" — that grows over time and produces an outward pressure consistent with the observed acceleration of the universe's expansion.
 
+## Summary
+This paper introduces and tests a novel hypothesis: that a cosmic-scale rip field, arising from mass-energy permanently lost through supermassive black holes, could account for observed dark energy. Using a custom Rust-based simulation of one million galaxies over 13.8 billion years, we show how cumulative rip field growth matches the acceleration behavior described by ΛCDM. Python-based visualizations analyze the field’s shape, rate of change, and curvature. A natural extension of this concept could explain inflation, dark energy, and other cosmological anomalies as outcomes of rip dynamics. All source code and scripts are included to enable full reproducibility.
+
 ## Motivation
 The standard ΛCDM cosmological model treats dark energy as a cosmological constant: a uniform, unchanging energy density that permeates space. While this fits observational data well, it lacks a physical mechanism. Our model proposes that instead of a static cosmological constant, the accelerating expansion is driven by a slow, cumulative loss of matter and energy through rips in spacetime.
 
@@ -143,4 +146,11 @@ MIT License. Contributions welcome.
 
 ## Author Notes
 This project is a conceptual exploration inspired by dissatisfaction with the notion of an unexplained cosmological constant. It is not intended as a formal theory, but as a computational thought experiment — one that seems to be surprisingly well-aligned with current data.
+
+## References
+- [1] Weinberg, S. (1989). The cosmological constant problem. Reviews of Modern Physics, 61(1), 1.
+- [2] Riess, A. G., et al. (1998). Observational Evidence from Supernovae for an Accelerating Universe and a Cosmological Constant. The Astronomical Journal, 116(3), 1009.
+- [3] Perlmutter, S., et al. (1999). Measurements of Omega and Lambda from 42 High-Redshift Supernovae. The Astrophysical Journal, 517(2), 565.
+- [4] Planck Collaboration (2020). Planck 2018 results. Astronomy & Astrophysics, 641, A6.
+- [5] OpenAI ChatGPT (2024). Assistance with simulation framework design, mathematical framing, and scientific documentation preparation.
 
