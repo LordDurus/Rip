@@ -44,7 +44,6 @@ def main():
     plt.grid(True)
     plt.tight_layout()
     plt.savefig('../assets/rip_field_fit.png', dpi=300)
-    plt.show()
-
+    
 if __name__ == "__main__":
     main()

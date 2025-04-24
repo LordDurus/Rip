@@ -29,7 +29,7 @@ def plot_average_with_deviation(data_path, output_path):
     plt.grid(True)
     plt.tight_layout()
 
-    output_file = os.path.join(output_path, "rip_field_mean_std.png")
+    output_file = os.path.join(output_path, "../assets/rip_field_mean_std.png")
     plt.savefig(output_file, dpi=300)
     print(f"Saved plot to: {output_file}")
 

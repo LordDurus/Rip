@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 
 # Directory that contains rip_output CSVs
 data_dir = os.path.join(os.path.dirname(__file__), "../data")
+assets_dir = os.path.join(os.path.dirname(__file__), "../assets")
+os.makedirs(assets_dir, exist_ok=True)
+
 data_files = glob.glob(os.path.join(data_dir, "*.csv"))
 
 # Storage for all runs
@@ -54,4 +57,8 @@ plt.ylabel("Energy Density (kg/m³, normalized)")
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
-plt.show()
+
+# Save to assets
+output_file = os.path.join(assets_dir, "rip_field_all_normalized.png")
+plt.savefig(output_file, dpi=300)
+print(f"Saved plot to: {output_file}")

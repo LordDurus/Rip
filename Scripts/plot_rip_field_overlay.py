@@ -22,7 +22,7 @@ def plot_multi_run_overlay(data_path, output_path):
     plt.legend(fontsize='small', loc='upper left', ncol=2, title="Run Files")
     plt.grid(True)
     plt.tight_layout()
-    output_file = os.path.join(output_path, "../assectsrip_field_overlay.png")
+    output_file = os.path.join(output_path, "../assets/rip_field_overlay.png")
     plt.savefig(output_file, dpi=300)
     print(f"Saved plot to: {output_file}")
 

@@ -51,7 +51,7 @@ Where:
 ## Results
 The rip field grows slowly at first, then accelerates and begins to flatten — matching the characteristic shape of cosmological expansion under ΛCDM. At 1,000,000 galaxies, the variance across runs becomes negligible, and the average aligns nearly perfectly with the ΛCDM dark energy density.
 
-![Simulated Rip Field vs ΛCDM](assets/rip_field_1M_galaxies.png)
+![Simulated Rip Field vs ΛCDM](assets/rip_field_all_normalized.png)
 
 ![Rip Field Fit](assets/rip_field_fit.png)
 *Figure X: Fitted exponential model of rip field evolution across time.*
