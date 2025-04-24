@@ -31,6 +31,7 @@ This project explores a speculative cosmological model where dark energy is not 
 │   ├── plot_all.py
 │   ├── plot_rip_field.py
 │   ├── plot_rip_field_overlay.py
+│   ├── plot_rip_field_second_derivative.py
 │   ├── plot_rip_field_mean_std.py
 │   ├── plot_rip_field_derivative.py
 │	 ├── run_all_scripts.py               # Master script to generate all plots

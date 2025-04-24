@@ -15,6 +15,7 @@ if __name__ == "__main__":
     run_script("plot_rip_field_derivative.py")
     run_script("plot_rip_field_mean_std.py")
     run_script("plot_rip_field_overlay.py")
+    run_script("plot_rip_field_second_derivative.py")    
     run_script("plot_rip_field.py")
     
     
