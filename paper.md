@@ -164,3 +164,31 @@ This project is a conceptual exploration inspired by dissatisfaction with the no
 - [4] Planck Collaboration (2020). Planck 2018 results. Astronomy & Astrophysics, 641, A6.
 - [5] OpenAI ChatGPT (2024). Assistance with simulation framework design, mathematical framing, and scientific documentation preparation.
 
+
+## Parameter calibration against $H(z)$ cosmic\‐chronometer data
+
+To test whether the rip\‐field model can reproduce the observed late\‑time expansion history, we carried out a coarse grid search over two free parameters that control the expansion behaviour of the field once it is normalised to the present epoch:
+
+* **$\Omega_{\text{rip},0}$** – the present\‑day energy density fraction sourced by rips (varied 0.60 → 0.78).
+* **$w$** – the simple phenomenological evolution index in $\Omega_{\text{rip}}(z)\propto(1+z)^{-w}$ (varied 0.50 → 1.00).
+
+For every $(\Omega_{\text{rip},0},w)$ pair (30 × 30 = 900 models) we computed a total model $H(z)$ curve
+
+$$H^2(z)=H_0^2[\,\Omega_m(1+z)^3+\Omega_r(1+z)^4+\Omega_{\text{rip}}(z)\,]$$
+
+and evaluated a $\chi^2$ goodness\‑of\‑fit against 29 cosmic\‑chronometer datapoints.
+
+![Grid\‑search $\chi^2$ surface](assets/rip_gridsearch_heatmap.png)
+
+The minimum was found at
+
+| parameter | best\‑fit value |
+|-----------|---------------|
+| $\Omega_{\text{rip},0}$ | **0.67 ± 0.02** |
+| $w$ | **0.60 ± 0.05** |
+| $\chi^2_{\min}$ | 23.6 (27 d.o.f) |
+
+Using these values in the comparison script produces an $H(z)$ curve that lies almost entirely within the 1 σ error bars of the data up to $z\simeq2$ (see updated **Figure W**).
+
+This quick optimisation suggests the rip\‑field can mimic a slowly\‑evolving dark\‑energy component without fine\‑tuning. A finer MCMC exploration is left for future work.
+
