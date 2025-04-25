@@ -8,7 +8,7 @@ data_dir = os.path.join(os.path.dirname(__file__), "../data")
 assets_dir = os.path.join(os.path.dirname(__file__), "../assets")
 os.makedirs(assets_dir, exist_ok=True)
 
-data_files = glob.glob(os.path.join(data_dir, "*.csv"))
+data_files = glob.glob(os.path.join(data_dir, "run*.csv"))
 
 # Storage for all runs
 dataframes = []

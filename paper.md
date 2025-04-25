@@ -71,6 +71,16 @@ The rip field grows slowly at first, then accelerates and begins to flatten — 
 ![Curvature of Rip Field](assets/rip_field_second_derivative.png)
 *Figure V: Second derivative of the rip field showing the acceleration of expansion over time.*
 
+### Hubble‑parameter comparison
+Using a two–dimensional grid search over the parameter space \(w \in [0.5,1.0]\) and \(Ω_{\text{rip},0} \in [0.64,0.72]\), the minimum \(χ^2\) occurs at \(w = 0.50\) and \(Ω_{\text{rip},0} = 0.72\). These values are now adopted for the fiducial rip‑field cosmology and have been used to generate the total
+
+\[ H(z) = H_0\,\sqrt{\,\Omega_m(1+z)^3 + \Omega_r(1+z)^4 + \Omega_{\text{rip}}(z)\,} \; , \quad \Omega_{\text{rip}}(z) = \Omega_{\text{rip},0}(1+z)^{-w} \]
+
+The resulting curve (blue) is plotted against the 31 cosmic‑chronometer measurements compiled in Stern *et al.* (2010) and subsequent work.
+
+![Rip‑field vs. Hubble data](assets/rip_field_vs_hz.png)
+*Figure W: Best‑fit rip‑field Hubble curve compared with observational H(z) points. Error bars denote the 1‑σ statistical uncertainties on each measurement.*
+
 ## Possible Outcomes for Exiting Matter
 To frame the novelty of this idea, we compare various scenarios that might occur when matter enters a black hole:
 
