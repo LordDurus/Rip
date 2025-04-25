@@ -17,6 +17,7 @@ if __name__ == "__main__":
     run_script("plot_rip_field_overlay.py")
     run_script("plot_rip_field_second_derivative.py")    
     run_script("plot_rip_field.py")
+    run_script("plot_rip_field_fit.py")
     run_script("compare_rip_field_to_hz.py")
     
     
