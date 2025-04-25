@@ -56,8 +56,8 @@ The rip field grows slowly at first, then accelerates and begins to flatten — 
 
 ![Simulated Rip Field vs ΛCDM](assets/rip_field_1M_galaxies.png)
 
-![Rip Field Fit](assets/rip_field_fit.png)
-*Figure X: Fitted exponential model of rip field evolution across time.*
+![Logistic Fit to Rip Field](assets/rip_field_logistic.png)
+*Figure W2: Logistic fit to the mean rip field (calibrated over 0–7 Gyr). Best‑fit parameters: \(L = 1.20	imes10^{-16}\), \(k = 9.6	imes10^{-4}\,	ext{Myr}^{-1}\), \(t_0 = 3.90\,	ext{Gyr}\). The model reproduces the simulated growth and converges to the plateau within a few percent, reinforcing the picture of a self‑limiting rip‑field tension.**
 
 ![Overlay of All Rip Field Runs](assets/rip_field_overlay.png)
 *Figure Y: Overlay of all 10 simulation runs showing consistent behavior.*
