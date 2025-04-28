@@ -21,5 +21,18 @@ pub const NUM_RUNS: usize = 10;
 /// Number of CPU cores to use (-1 = all available).
 pub const NUM_CORES: isize = -1;
 
-/// Fractional decay applied to rip field per time step (e.g., 0.9999 = 0.01% decay per step).
-pub const DECAY_FACTOR: f64 = 0.9999;
+/// Equation of State parameter (w) describes the pressure-to-density ratio.
+/// Different types of cosmic "stuff" have characteristic w values:
+///
+/// | Type of Stuff                 | Typical w Value | Behavior                                   |
+/// |-------------------------------|-----------------|--------------------------------------------|
+/// | Normal matter (dust)          | w = 0           | Slows expansion, gravity dominates         |
+/// | Radiation (early universe)    | w = 1/3         | Expands faster (but still decelerates)     |
+/// | Dark energy (cosmological constant) | w = -1    | Accelerated expansion                      |
+/// | Phantom energy (hypothetical) | w < -1          | "Big Rip" universe destruction             |
+///
+/// Setting w = -1 models dark energy with constant density causing accelerated expansion.
+pub const W_DARK_ENERGY: f64 = -1.0;
+
+/// Time (in million years) after which matter density is negligible
+pub const MATTER_FADEOUT_TIME_MYR: f64 = 5000.0;

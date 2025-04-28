@@ -1,7 +1,7 @@
 use rip_core::constants::{G, LIGHT_SPEED};
 use rip_core::dark_energy_config::{
-    DECAY_FACTOR, INITIAL_BH_MASS, INITIAL_MASS, NUM_CORES, NUM_GALAXIES, NUM_RUNS, SIM_DURATION,
-    TIME_STEP,
+    INITIAL_BH_MASS, INITIAL_MASS, MATTER_FADEOUT_TIME_MYR, NUM_CORES, NUM_GALAXIES, NUM_RUNS,
+    SIM_DURATION, TIME_STEP, W_DARK_ENERGY,
 };
 
 // mod magic_numbers;
@@ -59,12 +59,6 @@ impl Galaxy {
     }
 }
 
-fn update_rip_field(global_rip_field: f64, lost_mass: f64) -> f64 {
-    let mut updated = global_rip_field + (lost_mass * G / LIGHT_SPEED.powi(2));
-    updated *= DECAY_FACTOR;
-    return updated;
-}
-
 fn run_simulation(run_index: usize) {
     let start = std::time::Instant::now();
     let mut rng = thread_rng();
@@ -82,18 +76,28 @@ fn run_simulation(run_index: usize) {
     // Create the data file and run the simulation
     writeln!(output, "time_myr,rip_strength,scale_factor").unwrap();
     let mut buffer = String::new();
-    let mut scale_factor = 1.0;
-    for t in (0..=SIM_DURATION).step_by(TIME_STEP) {
+
+    for time_myr in (0..=SIM_DURATION).step_by(TIME_STEP) {
         for galaxy in &mut galaxies {
-            let lost_mass = galaxy.simulate_step(t, &mut rng);
+            let lost_mass = galaxy.simulate_step(time_myr, &mut rng);
             if lost_mass > 0.0 {
-                global_rip_field = update_rip_field(global_rip_field, lost_mass);
+                global_rip_field += lost_mass * G / LIGHT_SPEED.powi(2);
             }
         }
-        scale_factor *= (global_rip_field.sqrt() * TIME_STEP as f64).exp();
+
+        let time_myr_f64 = time_myr as f64;
+
+        let matter_density = if time_myr_f64 < MATTER_FADEOUT_TIME_MYR {
+            1.0 / (1.0 + time_myr_f64).powf(1.5)
+        } else {
+            0.0 //  matter density: stop mattering after a lot of expansion
+        };
+
+        let scale_factor = (global_rip_field + matter_density).powf(1.0 + W_DARK_ENERGY);
+
         buffer.push_str(&format!(
             "{},{:.12e},{:.6}\n",
-            t, global_rip_field, scale_factor
+            time_myr, global_rip_field, scale_factor
         ));
     }
     write!(output, "{}", buffer).unwrap();
