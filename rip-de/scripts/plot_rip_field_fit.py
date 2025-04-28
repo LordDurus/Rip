@@ -14,7 +14,11 @@ def logistic(t, L, k, t0, C):
 def main():
     # 1. load mean rip-field
     run_files = sorted(glob.glob("../data/run_*.csv"))
-    rip_runs  = [pd.read_csv(f)["rip_field"].values for f in run_files]
+
+    if not run_files:
+        raise FileNotFoundError("No run_*.csv files found in rip-de/data/")
+
+    rip_runs  = [pd.read_csv(f)["rip_strength"].values for f in run_files]
     rip_mean  = np.mean(rip_runs, axis=0)
     time_myr  = pd.read_csv(run_files[0])["time_myr"].values        # common x-axis
 

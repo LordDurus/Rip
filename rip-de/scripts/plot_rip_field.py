@@ -11,7 +11,7 @@ def exp_model(t, a, b):
 def load_and_plot(file_path):
     df = pd.read_csv(file_path)
     time = df['time_myr']
-    rip = df['rip_field']
+    rip = df['rip_strength']
 
     # Fit exponential model
     try:

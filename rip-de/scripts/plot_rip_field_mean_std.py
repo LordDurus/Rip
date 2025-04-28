@@ -10,7 +10,7 @@ def plot_average_with_deviation(data_path, output_path):
 
     for file_path in all_files:
         df = pd.read_csv(file_path)
-        rip_data.append(df['rip_field'].values)
+        rip_data.append(df['rip_strength'].values)
 
     rip_array = np.asarray(rip_data, dtype=np.float64)
     mean_rip = np.mean(rip_array, axis=0)

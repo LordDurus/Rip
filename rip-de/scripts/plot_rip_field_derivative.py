@@ -12,7 +12,7 @@ def plot_rip_field_derivative(data_path, output_path):
     for file_path in all_files:
         df = pd.read_csv(file_path)
         time = df['time_myr'].values
-        rip = df['rip_field'].values
+        rip = df['rip_strength'].values
         delta_rip = np.gradient(rip, time)  # first derivative
         derivatives.append(delta_rip)
 

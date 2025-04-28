@@ -12,7 +12,7 @@ def plot_multi_run_overlay(data_path, output_path):
     for file_path in all_files:
         df = pd.read_csv(file_path)
         time = df['time_myr']
-        rip_field = df['rip_field']
+        rip_field = df['rip_strength']
         label = os.path.basename(file_path)
         plt.plot(time, rip_field, label=label)
 

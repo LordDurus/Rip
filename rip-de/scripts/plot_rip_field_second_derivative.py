@@ -11,7 +11,7 @@ def plot_second_derivative(data_path, output_path):
 
     for file_path in all_files:
         df = pd.read_csv(file_path)
-        rip_data.append(df['rip_field'].values)
+        rip_data.append(df['rip_strength'].values)
 
     rip_array = np.asarray(rip_data, dtype=np.float64)
     time = pd.read_csv(all_files[0])['time_myr'].values

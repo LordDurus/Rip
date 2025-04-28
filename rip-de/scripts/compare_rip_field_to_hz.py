@@ -15,7 +15,7 @@ def main():
 
     # --- 1. load simulation ---
     run_files = sorted(glob.glob("../data/run_*.csv"))
-    rip_runs  = [pd.read_csv(f)["rip_field"].values for f in run_files]
+    rip_runs  = [pd.read_csv(f)["rip_strength"].values for f in run_files]
     rip_mean  = np.mean(rip_runs, axis=0)
     time_myr  = pd.read_csv(run_files[0])["time_myr"].values
     z_sim     = time_to_redshift(time_myr)
@@ -30,7 +30,7 @@ def main():
     # omega_rip_today = 1.0 - omega_m - omega_r
     omega_rip_today = 0.72
     
-    print("omega_rip_today = ", omega_rip_today)
+    # print("omega_rip_today = ", omega_rip_today)
     
     idx_today = np.argmin(z_sim)  
     scale_factor = omega_rip_today / rip_mean[idx_today]
