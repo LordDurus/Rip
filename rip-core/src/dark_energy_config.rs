@@ -16,7 +16,7 @@ pub const SIM_DURATION: usize = 13_800;
 pub const TIME_STEP: usize = 100;
 
 /// Number of independent simulation runs.
-pub const NUM_RUNS: usize = 10;
+pub const NUM_RUNS: usize = 50;
 
 /// Number of CPU cores to use (-1 = all available).
 pub const NUM_CORES: isize = -1;
