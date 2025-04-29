@@ -14,10 +14,10 @@ def plot_phase(df, label, color):
     )
 
 # Load inflation data
-inflation_df = pd.read_csv('rip-inf/data/simulation.csv')
+inflation_df = pd.read_csv('../rip-inf/data/simulation.csv')
 
 # Load dark energy data
-dark_energy_files = sorted(glob.glob('rip-de/data/run_*.csv'))
+dark_energy_files = sorted(glob.glob('../rip-de/data/run_*.csv'))
 if not dark_energy_files:
     raise FileNotFoundError("No run_*.csv files found in rip-de/data/")
 latest_dark_energy_file = dark_energy_files[-1]

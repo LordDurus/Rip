@@ -4,113 +4,133 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-import os
-import subprocess
+import glob, os, subprocess
 
-# ---------- Load data ----------
+# --- load & stitch phases ---
+infl = pd.read_csv('../rip-inf/data/simulation.csv')
+infl['time'] = infl.index * 0.01
+de_files = sorted(glob.glob('../rip-de/data/run_*.csv'))
+de = pd.read_csv(de_files[-1]).rename(columns={'time_myr':'time'})
+de['time'] += infl['time'].iloc[-1] + 0.1
 
-# Load inflation data
-inflation_df = pd.read_csv('rip-inf/data/simulation.csv')
-inflation_df['time'] = inflation_df.index * 0.01  # Assume TIME_STEP=0.01 units for inflation
+# combine arrays
+T_full = np.concatenate([infl.time.values, de.time.values])
+A_full = np.concatenate([infl.scale_factor.values, de.scale_factor.values])
 
-# Load dark energy data
-import glob
-dark_energy_files = sorted(glob.glob('rip-de/data/run_*.csv'))
-if not dark_energy_files:
-    raise FileNotFoundError("No run_*.csv files found in rip-de/data/")
-latest_de_file = dark_energy_files[-1]
-dark_energy_df = pd.read_csv(latest_de_file)
-dark_energy_df.rename(columns={'time_myr': 'time'}, inplace=True)
+# split indices
+N_infl = len(infl)
+N_total = len(T_full)
+N_dark = len(de)
 
-# Shift dark energy time to start after inflation
-inflation_end_time = inflation_df['time'].iloc[-1]
-dark_energy_df['time'] += inflation_end_time + 0.1  # small gap to separate phases
+# dark‐energy min/max
+A_dark = A_full[N_infl:]
+min_dark, max_dark = A_dark.min(), A_dark.max()
 
-# Combine
-combined_time = np.concatenate([inflation_df['time'].values, dark_energy_df['time'].values])
-combined_scale = np.concatenate([inflation_df['scale_factor'].values, dark_energy_df['scale_factor'].values])
+# --- helpers ---
+def blend_color(norm):
+    # blue→red
+    return ( norm, 0.0, 1.0 - norm )
 
-# ---------- Animation Setup ----------
-
-fig, ax = plt.subplots(figsize=(12, 7))
-ax.set_yscale('log')
-ax.set_xlabel('Time (Simulation Units / Myr)')
-ax.set_ylabel('Scale Factor (log scale)')
-ax.set_title('Combined Scale Factor Evolution')
-ax.grid(True, which='both', linestyle='--', alpha=0.7)
-
-line, = ax.plot([], [], lw=2)
-
-label_text = ax.text(0.05, 0.95, '', transform=ax.transAxes, fontsize=16,
-                     verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-
-ax.set_xlim(combined_time.min(), combined_time.max())
-ax.set_ylim(1e0, combined_scale.max()*1.5)
-
-# ---------- Define color transition ----------
-def get_color(t_normalized):
-    """Blend from blue to red."""
-    r = t_normalized  # Red increases over time
-    g = max(0.3, 1.0 - t_normalized)  # Green fades a bit
-    b = 1.0 - t_normalized  # Blue decreases
-    return (r, g, b)
-
-# ---------- Define dynamic label ----------
-def get_phase_label(current_time):
-    if current_time < inflation_end_time:
+def phase_label(t):
+    if t < infl['time'].iloc[-1]:
         return "Inflation Phase"
-    elif current_time < inflation_end_time + 5000:
-        return "Matter Domination Phase"
+    elif t < infl['time'].iloc[-1] + 5000:
+        return "Matter Domination"
     else:
         return "Dark Energy Domination"
 
-# ---------- Animation function ----------
+# --- figure setup ---
+fig, ax = plt.subplots(figsize=(10,6))
+ax.set_yscale('log')
+ax.set_xlim(T_full.min(), T_full.max())
+ax.set_ylim(1, A_full.max()*1.2)
+ax.grid(True, which='both', linestyle='--', alpha=0.3)
+ax.set_xlabel("Time (Myr or sim units)")
+ax.set_ylabel("Scale Factor (log)")
+ax.set_title("Combined Scale Factor Evolution")
+
+line, = ax.plot([], [], lw=4)
+txt = ax.text(0.05, 0.95, "", transform=ax.transAxes,
+              fontsize=14, va='top',
+              bbox=dict(facecolor='white', alpha=0.8, boxstyle='round'))
+
+# split out the two segments once
+infl_x, infl_y = T_full[:N_infl], A_full[:N_infl]
+dark_x, dark_y = T_full[N_infl:], A_full[N_infl:]
+
+# one-time zoom flag
+first_zoom = {"done": False}
+
+# --- init & animate ---
+def init():
+    line.set_data([], [])
+    txt.set_text("Starting simulation…")
+    txt.set_alpha(1.0)
+    return line, txt
+
 def animate(i):
-    n_points = len(combined_time)
-    idx = int(i * n_points / frames)
-
-    if idx < 2:
-        # Early startup
-        placeholder_x = [combined_time[0], combined_time[1]]
-        placeholder_y = [combined_scale[0], combined_scale[1]]
-        line.set_data(placeholder_x, placeholder_y)
-        line.set_color((0.7, 0.7, 0.7))
-    else:
-        # Normal drawing
-        x = combined_time[:idx]
-        y = combined_scale[:idx]
-
-        t_normalized = idx / n_points
+    # Phase 1: Inflation spike
+    if i < N_infl:
+        x = infl_x[: i+1]
+        y = infl_y[: i+1]
         line.set_data(x, y)
-        line.set_color(get_color(t_normalized))
+        line.set_color((0.5,0.5,0.5))    # gray
+        line.set_linewidth(4)
+        txt.set_text("Inflation Phase")
+        txt.set_alpha(1.0)
 
-    # Label logic (separate and clean)
-    fade_frames = 10
-    if i < fade_frames:
-        label_text.set_alpha(1.0 - (i / fade_frames))
-        label_text.set_text("Starting simulation...")
+    # Phase 2: Dark-energy growth
     else:
-        label_text.set_alpha(1.0)
-        label_text.set_text(get_phase_label(combined_time[idx-1]))
+        # zoom Y-axis once
+        if not first_zoom["done"]:
+            ax.set_ylim(dark_y.min()*0.9, dark_y.max()*1.1)
+            first_zoom["done"] = True
 
-    return line, label_text
+        # redraw entire inflation in the background
+        ax.lines[0].set_data(infl_x, infl_y)
+        ax.lines[0].set_color((0.8,0.8,0.8))
+        ax.lines[0].set_linewidth(1)
+
+        # now draw the dark segment up to frame j
+        j = i - N_infl
+        norm = j / (len(dark_x)-1)
+        x = dark_x[: j+1]
+        y = dark_y[: j+1]
+        line.set_data(x, y)
+        line.set_color((norm, 0.0, 1.0-norm))  # blue→red
+        line.set_linewidth(4)
+
+        txt.set_text(
+            "Dark Energy Domination" 
+            if dark_x[j] >= infl_x[-1] + 5000 
+            else "Matter Domination"
+        )
+        txt.set_alpha(1.0)
+
+    return line, txt
 
 
-# ---------- Create the animation ----------
-frames = len(combined_time)
-# frames = 500
+animate.first_dark = True
+
+# --- build & save ---
 ani = animation.FuncAnimation(
-    fig, animate, frames=frames, interval=20, blit=False
+    fig, animate,
+    init_func=init,
+    frames=N_total,
+    interval=30,
+    blit=False
 )
 
-# Save animation
-gif_path = 'assets/combined_scale_factor_animation.gif'
-ani.save(gif_path, writer='pillow', fps=30)
-print(f"Animation saved to {gif_path}")
+out = '../assets/combined_scale_factor_animation.gif'
+ani.save(out, writer='pillow', fps=20)
+print("Saved to", out)
 
-# ---------- Shrink with gifsicle if available ----------
+# optional compression
 try:
-    subprocess.run(["gifsicle", "-O3", "--colors", "256", "-i", gif_path, "-o", gif_path], check=True)
-    print("GIF compressed successfully using gifsicle!")
+    subprocess.run(
+        ["gifsicle","-O3","--colors","256",out,"-o",out],
+        check=True
+    )
+    print("Compressed!")
 except FileNotFoundError:
-    print("gifsicle not found. Skipping compression. Install gifsicle to optimize GIF size.")
+    pass
