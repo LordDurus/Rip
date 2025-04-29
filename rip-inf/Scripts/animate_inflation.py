@@ -2,9 +2,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import os
+import subprocess
 
 # load the csv
-df = pd.read_csv('data/simulation.csv')
+df = pd.read_csv('../data/simulation.csv')
 
 # fix rounding
 df['time'] = df['time'].round(6)
@@ -40,7 +41,12 @@ def update(frame):
 ani = animation.FuncAnimation(fig, update, frames=len(df), interval=20, blit=True)
 
 # save animation
-ani.save('assets/inflation_animation.gif', writer='pillow', fps=30)
+gif_path = 'assets/inflation_animation.gif'
+ani.save(gif_path, writer='pillow', fps=30)
 print("Animation saved to assets/inflation_animation.gif")
 
-plt.show()
+# ---------- Shrink with gifsicle if available ----------
+try:
+    subprocess.run(["gifsicle", "-O3", "--colors", "256", "-i", gif_path, "-o", gif_path], check=True)    
+except FileNotFoundError:
+    print("gifsicle not found. Skipping compression. Install gifsicle to optimize GIF size.")

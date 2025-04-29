@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import os
 
 # load the csv
-df = pd.read_csv('data/simulation.csv')
+df = pd.read_csv('../data/simulation.csv')
 
 # fix rounding
 df['time'] = df['time'].round(6)
@@ -15,7 +15,6 @@ df = df[(df['time'] > epsilon) & (df['scale_factor'] > epsilon) & (df['rip_stren
 # find inflation end
 rip_threshold = 1.0
 inflation_end = df[df['rip_strength'] < rip_threshold].iloc[0]['time']
-print(f"Inflation ends at t ≈ {inflation_end:.3f}")
 
 # make sure assets folder exists
 os.makedirs('assets', exist_ok=True)
@@ -48,7 +47,5 @@ plt.title('Rip Field Inflation Simulation')
 fig.tight_layout()
 
 # save the figure
-plt.savefig('assets/scale_factor_rip_plot_inflation_end.png', dpi=300)
+plt.savefig('../assets/scale_factor_rip_plot_inflation_end.png', dpi=300)
 print("Plot saved to assets/scale_factor_rip_plot_inflation_end.png")
-
-plt.show()
