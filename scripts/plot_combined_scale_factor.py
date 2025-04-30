@@ -51,6 +51,3 @@ plt.savefig(f'assets/history/combined_scale_factor_plot_{timestamp}.png', dpi=30
 plt.savefig(f'assets/history/combined_scale_factor_plot_{timestamp}.pdf')
 
 print(f"Saved plots: assets/combined_scale_factor_plot.png and history folder.")
-
-# Show it
-plt.show()

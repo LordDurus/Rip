@@ -41,7 +41,7 @@ def update(frame):
 ani = animation.FuncAnimation(fig, update, frames=len(df), interval=20, blit=True)
 
 # save animation
-gif_path = 'assets/inflation_animation.gif'
+gif_path = '../assets/inflation_animation.gif'
 ani.save(gif_path, writer='pillow', fps=30)
 print("Animation saved to assets/inflation_animation.gif")
 

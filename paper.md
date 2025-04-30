@@ -224,27 +224,32 @@ Ultimately, the rip field approach offers a promising direction for understandin
 
 ---
 
-**Figure 11. Inflation Animation Snapshot**
-
-> Frame capture from animation showing rapid early universe inflation and transition to steady-state expansion.
-
-<img src="rip-inf/assets/inflation_animation.gif" width="800"/>
-
----
-
-**Figure 12. Scale Factor and Inflation End**
+**Figure 11. Scale Factor and Inflation End**
 
 > Evolution of the cosmological scale factor highlighting inflation endpoint and onset of slower expansion.
 
 <img src="rip-inf/assets/scale_factor_rip_plot_inflation_end.png" width="800"/>
 
 
-**Figure 13. Combined Scale Factor Plot**
+**Figure 12. Combined Scale Factor Plot**
 
 > Combined plot showing the evolution of the cosmological scale factor across inflation, stabilization, and late-time acceleration phases, tying together the overall expansion history.
 
 <img src="assets/combined_scale_factor_plot.png" width="800"/>
 
+**Figure 13. Rip Field Dark Energy Animation**
+
+> Animated evolution of the average rip field strength across cosmic time, based on 50 runs. Shows late-time acceleration and convergence toward the ΛCDM dark energy limit.
+
+<img src="rip-de/assets/rip_field_summary_animation.gif" width="800"/>
+
+---
+
+**Figure 14. Rip Field Inflation Animation**
+
+> Animation of the inflation-phase simulation showing the rapid early exponential expansion and stabilization period.
+
+<img src="rip-inf/assets/inflation_animation.gif" width="800"/>
 
 ---
 
