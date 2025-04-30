@@ -140,9 +140,16 @@ Ultimately, the rip field approach offers a promising direction for understandin
 
 ---
 
-# Table of Figures
+## Table of Figures
 
 ---
+
+**Figure 0. Rip Field Animation Snapshots: Dark Energy vs. Inflation**
+
+
+> Side-by-side visual comparison of the rip field's role during the early inflation phase (right) and late-time dark energy phase (left).
+
+<img src="assets/rip_field_dual_snapshots.png" width="800"/>
 
 **Figure 1. Rip Field — 1 Million Galaxies**
 
