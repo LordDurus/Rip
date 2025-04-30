@@ -90,8 +90,6 @@ The figures show three distinct stages:
 
 Comparison of the simulated expansion rates to observational Hubble parameter data (Figure 9) shows strong qualitative agreement, with general trends aligning across a wide range of cosmic times.
 
-Finally, the combined scale factor plot ([Figure 13](#figure-13-combined-scale-factor-plot)) illustrates how early inflation, stabilization, and late-time acceleration emerge seamlessly from the model. This unified view reinforces the plausibility of rip field-driven cosmological evolution.
-
 The results presented here provide strong evidence that a rip-field-driven model can account for early inflation, stabilization, and late-time acceleration within a single, coherent framework. A combined scale factor plot further illustrates how these phases integrate into a continuous expansion history. In the following sections, we will interpret these findings in the context of observational cosmology and explore the broader implications for the evolution and fate of the universe.
 
 ---  
