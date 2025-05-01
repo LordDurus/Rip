@@ -94,9 +94,9 @@ def update(frame_idx):
 ani = animation.FuncAnimation(fig, update, frames=frames, interval=30, blit=False)
 
 # Save
-gif_path = os.path.join(assets_dir, "rip_field_summary_animation.gif")
+gif_path = os.path.join(assets_dir, "../assets/rip_field_summary_animation.gif")
 ani.save(gif_path, writer='pillow', fps=25)
-print(f"Saved animation → {gif_path}")
+print(f"Saved animation: {gif_path}")
 
 # Compress (optional)
 try:

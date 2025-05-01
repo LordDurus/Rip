@@ -2,6 +2,8 @@ import glob
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import shutil
+import subprocess
 from scipy.optimize import curve_fit
 
 # Define a model to fit: exponential as a starting point
@@ -43,7 +45,20 @@ def main():
     plt.legend()
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig('../assets/rip_field_fit.png', dpi=300)
     
+    output_file = "../assets/rip_field_fit.png"
+
+    plt.savefig(output_file, dpi=300)
+
+    if shutil.which('optipng.exe'):
+        try:
+            subprocess.run(['optipng.exe', '-o7', output_file], check=True)            
+        except subprocess.CalledProcessError as e:
+            print(f"optipng failed: {e}")
+    else:
+        print("optipng not found in PATH; skipping PNG optimization.")
+    
+    print(f"Saved plot: {output_file}")
+
 if __name__ == "__main__":
     main()

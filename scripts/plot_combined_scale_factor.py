@@ -2,6 +2,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import glob
 import os
+import shutil
+import subprocess
 from datetime import datetime
 
 def plot_phase(df, label, color):
@@ -45,9 +47,14 @@ plt.legend()
 os.makedirs('assets/history', exist_ok=True)
 
 # Save plots
-plt.savefig('assets/combined_scale_factor_plot.png', dpi=300)
-timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-plt.savefig(f'assets/history/combined_scale_factor_plot_{timestamp}.png', dpi=300)
-plt.savefig(f'assets/history/combined_scale_factor_plot_{timestamp}.pdf')
+output_file = "../assets/combined_scale_factor_plot.png"
 
-print(f"Saved plots: assets/combined_scale_factor_plot.png and history folder.")
+if shutil.which('optipng.exe'):
+	try:
+		subprocess.run(['optipng.exe', '-o7', output_file], check=True)            
+	except subprocess.CalledProcessError as e:
+		print(f"optipng failed: {e}")
+else:
+	print("optipng not found in PATH; skipping PNG optimization.")
+
+print(f"Saved plot: {output_file}")

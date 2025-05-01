@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import glob
 import os
+import shutil
+import subprocess
 
 def plot_multi_run_overlay(data_path, output_path):
     plt.figure(figsize=(12, 7))
@@ -24,6 +26,14 @@ def plot_multi_run_overlay(data_path, output_path):
     plt.tight_layout()
     output_file = os.path.join(output_path, "rip_field_overlay.png")
     plt.savefig(output_file, dpi=300)
+    if shutil.which('optipng.exe'):
+        try:
+            subprocess.run(['optipng.exe', '-o7', output_file], check=True)            
+        except subprocess.CalledProcessError as e:
+            print(f"optipng failed: {e}")
+    else:
+        print("optipng not found in PATH; skipping PNG optimization.")
+
     print(f"Saved plot to: {output_file}")
 
 if __name__ == "__main__":

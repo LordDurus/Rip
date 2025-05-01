@@ -1,4 +1,8 @@
-import os, glob
+   
+
+import shutil
+import glob
+import subprocess
 import numpy as np, pandas as pd, matplotlib.pyplot as plt
 from astropy.cosmology import Planck18 as cosmo     # Planck-2018 parameters
 
@@ -65,10 +69,19 @@ def main():
     plt.xlabel("Redshift  $z$")
     plt.ylabel("$H(z)$  [km s⁻¹ Mpc⁻¹]")
     plt.title("Rip-field cosmology compared with observational $H(z)$")
-    plt.legend(); plt.grid(True); plt.tight_layout()    
-    out = "../assets/rip_field_vs_hz.png"
-    plt.savefig(out, dpi=300)
-    print(f"Saved plot: {out}")
+    plt.legend(); plt.grid(True); plt.tight_layout()
+    
+    output_file = "../assets/rip_field_vs_hz.png"
+    plt.savefig(output_file, dpi=300)
+    if shutil.which('optipng.exe'):
+        try:
+            subprocess.run(['optipng.exe', '-o7', output_file], check=True)            
+        except subprocess.CalledProcessError as e:
+            print(f"optipng failed: {e}")
+    else:
+        print("optipng not found in PATH; skipping PNG optimization.")
+
+    print(f"Saved plot: {output_file}")
 
 if __name__ == "__main__":
     main()

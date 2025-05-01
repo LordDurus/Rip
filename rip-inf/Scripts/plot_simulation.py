@@ -1,6 +1,8 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
+import shutil
+import subprocess
 
 # load the csv
 df = pd.read_csv('../data/simulation.csv')
@@ -47,5 +49,16 @@ plt.title('Rip Field Inflation Simulation')
 fig.tight_layout()
 
 # save the figure
-plt.savefig('../assets/scale_factor_rip_plot_inflation_end.png', dpi=300)
-print("Plot saved to assets/scale_factor_rip_plot_inflation_end.png")
+
+output_file = "../assets/scale_factor_rip_plot_inflation_end.png"
+plt.savefig(output_file, dpi=300)
+
+if shutil.which('optipng.exe'):
+	try:
+		subprocess.run(['optipng.exe', '-o7', output_file], check=True)            
+	except subprocess.CalledProcessError as e:
+		print(f"optipng failed: {e}")
+else:
+	print("optipng not found in PATH; skipping PNG optimization.")
+
+print(f"Saved plot: {output_file}")

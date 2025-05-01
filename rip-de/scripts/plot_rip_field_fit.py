@@ -3,6 +3,8 @@ import os, glob, json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import shutil
+import subprocess
 from scipy.optimize import curve_fit
 
 # ---------- logistic model ----------
@@ -43,9 +45,18 @@ def main():
     plt.legend(); plt.grid(True); plt.tight_layout()
 
     os.makedirs("../assets", exist_ok=True)
-    out_png  = "../assets/rip_field_fit.png"
-    plt.savefig(out_png, dpi=300)
-    print("Saved fit plot: ", out_png)
+    output_file  = "../assets/rip_field_fit.png"
+    plt.savefig(output_file, dpi=300)
+
+    if shutil.which('optipng.exe'):
+        try:
+            subprocess.run(['optipng.exe', '-o7', output_file], check=True)            
+        except subprocess.CalledProcessError as e:
+            print(f"optipng failed: {e}")
+    else:
+        print("optipng not found in PATH; skipping PNG optimization.")
+
+    print("Saved fit plot: ", output_file)
 
     # 4. save parameters for paper
     out_json = "../assets/rip_fit_params.json"

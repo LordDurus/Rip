@@ -1,6 +1,8 @@
 import os
 import glob
 import pandas as pd
+import shutil
+import subprocess
 import matplotlib.pyplot as plt
 
 # Directory that contains rip_output CSVs
@@ -66,9 +68,17 @@ plt.xlabel("Time (Million Years)")
 plt.ylabel("Energy Density (kg/m³, normalized)")
 plt.legend()
 plt.grid(True)
-#plt.tight_layout(rect=[0, 0, 1, 0.95])
 
 # Save to assets
 output_file = os.path.join(assets_dir, "rip_field_all_normalized.png")
 plt.savefig(output_file, dpi=300)
+
+if shutil.which('optipng.exe'):
+        try:
+            subprocess.run(['optipng.exe', '-o7', output_file], check=True)            
+        except subprocess.CalledProcessError as e:
+            print(f"optipng failed: {e}")
+else:
+    print("optipng not found in PATH; skipping PNG optimization.")
+
 print(f"Saved plot to: {output_file}")
