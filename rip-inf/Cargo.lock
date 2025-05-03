@@ -11,4 +11,5 @@ name = "rip-inf"
 version = "0.1.0"
 dependencies = [
  "rip-core",
+ "rand"
 ]

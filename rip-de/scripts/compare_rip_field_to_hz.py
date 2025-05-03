@@ -63,8 +63,7 @@ def main():
     order   = np.argsort(z_sim)
     z_plot  = z_sim[order]
     H_plot  = H_model[order]
-    plt.plot(z_plot, H_plot, label="Total model $H(z)$ (matter+radiation+rip)", color="blue")
-    #plt.plot(z_sim, H_model, label="Total model $H(z)$ (matter+radiation+rip)", color="blue")
+    plt.plot(z_plot, H_plot, label="Total model $H(z)$ (matter+radiation+rip)", color="blue")    
     plt.errorbar(hz_data["z"], hz_data["H"], yerr=hz_data["err"], fmt="o", color="black", ecolor="gray", capsize=3, label="Observed cosmic-chronometer $H(z)$")
     plt.xlabel("Redshift  $z$")
     plt.ylabel("$H(z)$  [km s⁻¹ Mpc⁻¹]")

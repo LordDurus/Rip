@@ -4,8 +4,24 @@ import os
 import shutil
 import subprocess
 
+if not os.path.exists('../data/simulation.csv') and os.path.exists('../data/simulation.csv.gz'):
+    import gzip
+    with gzip.open('../data/simulation.csv.gz', 'rb') as f_in:
+        with open('../data/simulation.csv', 'wb') as f_out:
+            f_out.write(f_in.read())
+
 # load the csv
-df = pd.read_csv('../data/simulation.csv')
+df = pd.read_csv('../data/simulation.csv', dtype={
+    'time': float,
+    'rip_strength': float,
+    'scale_factor': float,
+    'x': float,
+    'y': float,
+    'z': float,
+    'vx': float,
+    'vy': float,
+    'vz': float
+})
 
 # fix rounding
 df['time'] = df['time'].round(6)
