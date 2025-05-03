@@ -54,10 +54,16 @@ The simulation initializes the rip field to a high value, allowing the universe 
   This plot shows the scale factor (universe size) and the rip field strength over time on a log-log scale. A green dotted line marks the end of inflation where the rip field falls below a critical threshold.  
 
 **Animated Inflation:**
+
+**3D Particle Expansion Animation**
+
+This animation shows the motion of particles over time in the rip-field simulation.  
+Particles are colored by speed, and the distribution shows early expansion dynamics.
+
 <p>
-  <img src="assets/inflation_animation.gif" alt="Inflation Animation" width="600"/>
+  <img src="assets/particle_animation.gif" alt="Particle Animation" width="600"/>
 </p>
-- **File:** `assets/inflation_animation.gif`
+- **File:** `assets/particle_animation.gif`  
 - **Description:**
   This GIF animates the growth of the scale factor over time, starting from early inflation to the end of rapid expansion. The animation visually captures the exponential nature of early-universe inflation.
 
@@ -101,4 +107,14 @@ python scripts/animate_inflation.py
 ```bash
 pip install pandas matplotlib pillow
 ```
+
+
+
+
+## References
+
+1. Guth, A. H. (1981). Inflationary universe: A possible solution to the horizon and flatness problems. *Phys. Rev. D*, 23(2), 347.  
+2. Riess, A. G., et al. (1998). Observational Evidence from Supernovae for an Accelerating Universe. *Astron. J.*, 116(3), 1009.  
+3. Planck Collaboration. (2018). Planck 2018 results. VI. Cosmological parameters. *Astronomy & Astrophysics*, 641, A6.  
+4. OpenAI. (2024). Assistance with cosmological modeling, simulation refactoring, and data visualization via ChatGPT.
 
