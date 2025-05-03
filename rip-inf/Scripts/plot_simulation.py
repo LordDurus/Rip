@@ -34,9 +34,6 @@ df = df[(df['time'] > epsilon) & (df['scale_factor'] > epsilon) & (df['rip_stren
 rip_threshold = 1.0
 inflation_end = df[df['rip_strength'] < rip_threshold].iloc[0]['time']
 
-# make sure assets folder exists
-os.makedirs('assets', exist_ok=True)
-
 # plot
 fig, ax1 = plt.subplots(figsize=(10, 6))
 

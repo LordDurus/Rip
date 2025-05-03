@@ -43,9 +43,6 @@ plt.title('Combined Scale Factor: Inflation and Dark Energy')
 plt.grid(True, which='both', linestyle='--', alpha=0.7)
 plt.legend()
 
-# Create asset folders if needed
-os.makedirs('assets/history', exist_ok=True)
-
 # Save plots
 output_file = "../assets/combined_scale_factor_plot.png"
 

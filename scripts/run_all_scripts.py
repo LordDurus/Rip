@@ -17,13 +17,8 @@ def run_all_scripts_in_folder(relative_folder: Path):
 	os.chdir(scripts_dir)
 
 	for script_path in script_files:
-		if "run_all" in script_path.name.lower():
+		if "run_all" in script_path.name.lower() or "utility" in script_path.name.lower():
 			continue
-
-		# ensure data & assets live at the project root
-		#(PROJECT_ROOT / "data").mkdir(exist_ok=True)
-		#(PROJECT_ROOT / "assets").mkdir(exist_ok=True)
-		#(PROJECT_ROOT / "assets" / "history").mkdir(exist_ok=True)
 
 		print(f"Running: {script_path}")
 		result = subprocess.run(["py", str(script_path)], capture_output=True, text=True)

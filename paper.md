@@ -138,6 +138,15 @@ Ultimately, the rip field approach offers a promising direction for understandin
 
 ---
 
+## References
+
+1. Guth, A. H. (1981). Inflationary universe: A possible solution to the horizon and flatness problems. *Phys. Rev. D*, 23(2), 347.
+2. Riess, A. G., et al. (1998). Observational Evidence from Supernovae for an Accelerating Universe. *Astron. J.*, 116(3), 1009.
+3. Planck Collaboration. (2018). Planck 2018 results. VI. Cosmological parameters. *Astronomy & Astrophysics*, 641, A6.
+4. OpenAI. (2024). Assistance with cosmological modeling, simulation refactoring, and data visualization via ChatGPT.
+
+---
+
 ## Table of Figures
 
 ---
@@ -255,6 +264,14 @@ Ultimately, the rip field approach offers a promising direction for understandin
 > Animation of the inflation-phase simulation showing the rapid early exponential expansion and stabilization period.
 
 <img src="rip-inf/assets/inflation_animation.gif" width="800"/>
+
+---
+
+**Figure 15. 3D Particle Animation (Inflation Phase)**
+
+> Animated 3D visualization of particle motion during the inflation phase of the simulation. Particle color represents velocity magnitude, and the distribution shows early expansion dynamics.
+
+<img src="rip-inf/assets/particle_animation.gif" width="800"/>
 
 ---
 

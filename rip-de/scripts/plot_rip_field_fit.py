@@ -44,7 +44,6 @@ def main():
     plt.title("Rip Field Evolution & Logistic Fit (0–7 Gyr calibrated)")
     plt.legend(); plt.grid(True); plt.tight_layout()
 
-    os.makedirs("../assets", exist_ok=True)
     output_file  = "../assets/rip_field_fit.png"
     plt.savefig(output_file, dpi=300)
 
