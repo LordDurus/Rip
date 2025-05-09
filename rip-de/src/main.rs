@@ -1,4 +1,4 @@
-use rip_core::constants::{G, LIGHT_SPEED};
+use rip_core::constants::{GRAVITY, LIGHT_SPEED};
 use rip_core::dark_energy_config::{
     INITIAL_BH_MASS, INITIAL_MASS, MATTER_FADEOUT_TIME_MYR, NUM_CORES, NUM_GALAXIES, NUM_RUNS,
     SIM_DURATION, TIME_STEP, W_DARK_ENERGY,
@@ -81,7 +81,7 @@ fn run_simulation(run_index: usize) {
         for galaxy in &mut galaxies {
             let lost_mass = galaxy.simulate_step(time_myr, &mut rng);
             if lost_mass > 0.0 {
-                global_rip_field += lost_mass * G / LIGHT_SPEED.powi(2);
+                global_rip_field += lost_mass * GRAVITY / LIGHT_SPEED.powi(2);
             }
         }
 

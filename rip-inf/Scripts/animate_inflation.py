@@ -4,10 +4,10 @@ import matplotlib.animation as animation
 import os
 import subprocess
 
-if not os.path.exists('../data/simulation.csv') and os.path.exists('../data/simulation.csv.gz'):
+if not os.path.exists('../data/simulation.csv') and os.path.exists('../data/structure.csv.gz'):
     import gzip
-    with gzip.open('../data/simulation.csv.gz', 'rb') as f_in:
-        with open('../data/simulation.csv', 'wb') as f_out:
+    with gzip.open('../data/structure.csv.gz', 'rb') as f_in:
+        with open('../data/structure.csv', 'wb') as f_out:
             f_out.write(f_in.read())            
 
 # load the csv

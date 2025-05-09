@@ -3,8 +3,8 @@ import gzip
 import shutil
 import os
 
-source = "../data/simulation.csv.gz"
-target = "../data/simulation.csv"
+source = "../data/structure.csv.gz"
+target = "../data/structure.csv"
 
 if not os.path.exists(source):
     print(f"Compressed file not found: {source}")

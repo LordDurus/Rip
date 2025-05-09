@@ -17,7 +17,7 @@ def run_all_scripts_in_folder(relative_folder: Path):
 	os.chdir(scripts_dir)
 
 	for script_path in script_files:
-		if "run_all" in script_path.name.lower() or "utility" in script_path.name.lower():
+		if "run_all" in script_path.name.lower() or "utility" in script_path.name.lower() or "_test" in script_path.name.lower() or "quick" in script_path.name.lower():
 			continue
 
 		print(f"Running: {script_path}")

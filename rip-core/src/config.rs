@@ -9,6 +9,10 @@ pub struct SimulationConfig {
     pub time_step_size: f64,
     /// Maximum simulation time (no units).
     pub max_simulation_time: f64,
+    /// Fraction of particles that are dark
+    pub dark_matter_ratio: f64,
+    /// Multiplier for dark-dark attraction
+    pub dark_gravity_boost: f64,
 }
 
 impl SimulationConfig {
@@ -19,6 +23,8 @@ impl SimulationConfig {
             rip_decay_rate: 5.0,
             time_step_size: 0.01,
             max_simulation_time: 10.0,
+            dark_matter_ratio: 0.85,
+            dark_gravity_boost: 1.0,
         }
     }
 
@@ -29,6 +35,8 @@ impl SimulationConfig {
             rip_decay_rate: 7.0,
             time_step_size: 0.01,
             max_simulation_time: 5.0,
+            dark_matter_ratio: 0.85,
+            dark_gravity_boost: 1.0,
         }
     }
 
@@ -39,6 +47,8 @@ impl SimulationConfig {
             rip_decay_rate: 2.0,
             time_step_size: 0.01,
             max_simulation_time: 20.0,
+            dark_matter_ratio: 0.85,
+            dark_gravity_boost: 1.0,
         }
     }
 
@@ -54,6 +64,8 @@ impl SimulationConfig {
             rip_decay_rate,
             time_step_size,
             max_simulation_time,
+            dark_matter_ratio: 0.85,
+            dark_gravity_boost: 1.0,
         }
     }
 }

@@ -7,12 +7,12 @@ import gzip
 import os
 
 # decompress if needed
-if not os.path.exists('../data/simulation.csv') and os.path.exists('../data/simulation.csv.gz'):
-    with gzip.open('../data/simulation.csv.gz', 'rb') as f_in, open('../data/simulation.csv', 'wb') as f_out:
+if not os.path.exists('../data/structure.csv') and os.path.exists('../data/structure.csv.gz'):
+    with gzip.open('../data/structure.csv.gz', 'rb') as f_in, open('../data/structure.csv', 'wb') as f_out:
         f_out.write(f_in.read())
 
 # load data
-df = pd.read_csv('../data/simulation.csv', dtype={
+df = pd.read_csv('../data/structure.csv', dtype={
     'time': float,
     'rip_strength': float,
     'scale_factor': float,

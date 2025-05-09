@@ -1,8 +1,24 @@
+use flate2::Compression;
+use flate2::write::GzEncoder;
+use std::fs::File;
+use std::io::BufWriter;
+
 /// Helper functions for simulation calculations.
 
 /// Calculates exponential decay of a field.
 pub fn exponential_decay(initial_value: f64, lambda: f64, time: f64) -> f64 {
     initial_value * (-lambda * time).exp()
+}
+
+/// Creates a buffered gzip writer for the given path.
+pub fn create_gzip_writer(path: &str) -> BufWriter<GzEncoder<File>> {
+    let path = std::path::Path::new(path);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).expect("Failed to create parent directories");
+    }
+    let file = File::create(path).expect("unable to create file");
+    let encoder = GzEncoder::new(file, Compression::default());
+    BufWriter::new(encoder)
 }
 
 #[cfg(test)]

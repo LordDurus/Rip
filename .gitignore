@@ -1,3 +1,13 @@
 **/target/
 assets/history/
 **/rip-inf/data/simulation.csv
+**/rip-inf/data/inflation.csv
+**/rip-inf/data/inflation.csv.gz
+**/rip-inf/data/structure.csv.gz
+curvature_3d_plot.html
+**/*mp4
+**/post.csv
+**/post.csv.gz
+
+# Except this specific one
+!**/synthetic_crystal_growth_gravityfade.mp4
