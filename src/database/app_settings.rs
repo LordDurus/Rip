@@ -15,9 +15,14 @@ pub enum AppValue {
 pub struct AppSettings {
     /// Total initial mass of each galaxy in solar masses.
     pub initial_mass: f64,
-
+    /// Initial mass of the central black hole in each galaxy (solar masses).
     pub initial_bh_mass: f64,
-
+    /// Time (in million years) after which matter density is negligible
+    pub matter_fadeout_time_myr: f64,
+    /// Duration of the simulation in millions of years.
+    pub sim_duration: usize,
+    /// Number of galaxies simulated per run.
+    pub num_galaxies: usize,
     /// Gravitational constant used in force calculations.
     pub gravity: f64,
     /// Speed of light constant.    
@@ -60,6 +65,24 @@ pub struct AppSettings {
     pub rip_density_weight: f64,
     /// Controls the long-term exponential decay (self-healing) of the rip field.
     pub rip_evaporation_rate: f64,
+    /// Number of independent simulation runs.
+    pub num_runs: usize,
+    /// Time step per simulation update (millions of years).
+    pub time_step: usize,
+    /// Number of CPU cores to use (-1 = all available).
+    pub num_cores: isize,
+    /// Equation of State parameter (w) describes the pressure-to-density ratio.
+    /// Different types of cosmic "stuff" have characteristic w values:
+    ///
+    /// | Type of Stuff                 | Typical w Value | Behavior                                   |
+    /// |-------------------------------|-----------------|--------------------------------------------|
+    /// | Normal matter (dust)          | w = 0           | Slows expansion, gravity dominates         |
+    /// | Radiation (early universe)    | w = 1/3         | Expands faster (but still decelerates)     |
+    /// | Dark energy (cosmological constant) | w = -1    | Accelerated expansion                      |
+    /// | Phantom energy (hypothetical) | w < -1          | "Big Rip" universe destruction             |
+    ///
+    /// Setting w = -1 models dark energy with constant density causing accelerated expansion.
+    pub dark_energy: f64,
 }
 
 impl AppSettings {
@@ -159,8 +182,22 @@ impl AppSettings {
         AppSettings {
             // initial_mass: get_f64("INITIAL_MASS"),
             // initial_bh_mass: get_f64("INITIAL_BH_MASS"),
+            // matter_fadeout_time_myr: get_f64("MATTER_FADEOUT_TIME_MYR"),
+            // sim_duration: get_usize("SIM_DURATION"),
+            // NUM_GALAXIES: get_usize("NUM_GALAXIES"),
+            // num_runs: get_usize("NUM_RUNS"),
+            // time_step: get_usize("TIME_STEP"),
+            // num_cores: get_isize("NUM_CORES"),
+            // W_DARK_ENERGY: get_f64("W_DARK_ENERGY"),
+            sim_duration: 13_800,
             initial_mass: 1.0e12,
             initial_bh_mass: 0.0,
+            matter_fadeout_time_myr: 5000.0,
+            num_galaxies: 1_000_000,
+            num_runs: 50,
+            time_step: 100,
+            num_cores: -1,
+            dark_energy: -1.0,
 
             gravity: get_f64("GRAVITY"),
             light_speed: get_f64("LIGHT_SPEED"),

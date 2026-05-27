@@ -1,8 +1,3 @@
-use dark_energy_config::{
-    INITIAL_BH_MASS, MATTER_FADEOUT_TIME_MYR, NUM_CORES, NUM_GALAXIES, NUM_RUNS, SIM_DURATION,
-    TIME_STEP, W_DARK_ENERGY,
-};
-
 use rand::{prelude::*, rngs::ThreadRng};
 use rayon::prelude::*;
 use std::fs::{File, create_dir_all};
@@ -16,7 +11,6 @@ use crate::database::db_provider::DbProvider;
 use crate::database::sqlite_provider::SqliteProvider;
 use crate::enums::LogLevel;
 
-mod dark_energy_config;
 mod database;
 mod enums;
 
@@ -36,12 +30,17 @@ impl Galaxy {
         }
     }
 
-    fn simulate_step(&mut self, time: usize, rng: &mut ThreadRng) -> f64 {
+    fn simulate_step(
+        &mut self,
+        time: usize,
+        app_settings: &AppSettings,
+        rng: &mut ThreadRng,
+    ) -> f64 {
         let matter_inflow = self.random_inflow(rng);
         self.bh_mass += matter_inflow;
         self.mass -= matter_inflow;
 
-        if self.rip_chance(time, rng) {
+        if self.rip_chance(time, app_settings, rng) {
             let lost_mass = self.destroy_mass(matter_inflow);
             self.bh_mass -= lost_mass;
             self.rip_events.push((time, lost_mass));
@@ -54,9 +53,10 @@ impl Galaxy {
         rng.gen_range(1e6..1e8)
     }
 
-    fn rip_chance(&self, time: usize, rng: &mut ThreadRng) -> bool {
+    fn rip_chance(&self, time: usize, app_settings: &AppSettings, rng: &mut ThreadRng) -> bool {
         let base_chance = 0.00009;
-        let scale = (self.bh_mass / INITIAL_BH_MASS) * (time as f64 / SIM_DURATION as f64).ln_1p();
+        let scale = (self.bh_mass / app_settings.initial_bh_mass)
+            * (time as f64 / app_settings.sim_duration as f64).ln_1p();
         rng.gen_bool((base_chance * scale).min(1.0))
     }
 
@@ -69,10 +69,10 @@ impl Galaxy {
 fn run_simulation(run_index: usize, app_settings: &AppSettings, db: &mut dyn DbProvider) {
     let start = std::time::Instant::now();
     let mut rng = thread_rng();
-    let mut galaxies: Vec<Galaxy> = (0..NUM_GALAXIES)
+    let mut galaxies: Vec<Galaxy> = (0..app_settings.num_galaxies)
         .map(|_| Galaxy::new(app_settings))
         .collect();
-    let mut global_rip_field: f64 = 0.0;
+    let mut global_rip_zone: f64 = 0.0;
 
     let dir = Path::new("data");
     if !dir.exists() {
@@ -100,28 +100,28 @@ fn run_simulation(run_index: usize, app_settings: &AppSettings, db: &mut dyn DbP
         .as_str(),
     );
 
-    for time_myr in (0..=SIM_DURATION).step_by(TIME_STEP) {
+    for time_myr in (0..=app_settings.sim_duration).step_by(app_settings.time_step) {
         for galaxy in &mut galaxies {
-            let lost_mass = galaxy.simulate_step(time_myr, &mut rng);
+            let lost_mass = galaxy.simulate_step(time_myr, app_settings, &mut rng);
             if lost_mass > 0.0 {
-                global_rip_field +=
+                global_rip_zone +=
                     lost_mass * app_settings.gravity / app_settings.light_speed.powi(2);
             }
         }
 
         let time_myr_f64 = time_myr as f64;
 
-        let matter_density = if time_myr_f64 < MATTER_FADEOUT_TIME_MYR {
+        let matter_density = if time_myr_f64 < app_settings.matter_fadeout_time_myr {
             1.0 / (1.0 + time_myr_f64).powf(1.5)
         } else {
             0.0 //  matter density: stop mattering after a lot of expansion
         };
 
-        let scale_factor = (global_rip_field + matter_density).powf(1.0 + W_DARK_ENERGY);
+        let scale_factor = (global_rip_zone + matter_density).powf(1.0 + app_settings.dark_energy);
 
         buffer.push_str(&format!(
             "{},{:.12e},{:.6}\n",
-            time_myr, global_rip_field, scale_factor
+            time_myr, global_rip_zone, scale_factor
         ));
     }
     write!(output, "{}", buffer).unwrap();
@@ -145,25 +145,25 @@ fn run_simulation(run_index: usize, app_settings: &AppSettings, db: &mut dyn DbP
 
 fn main() {
     let conn = setup_database(true).unwrap();
-    let settings = AppSettings::get_settings(&conn);
+    let app_settings = AppSettings::get_settings(&conn);
     let mut db = SqliteProvider { conn };
-    show_settings(&settings);
+    show_settings(&app_settings);
     let start = std::time::Instant::now();
 
     // If NUM_CORES is -1, use all available threads. Otherwise, set the limit.
-    if NUM_CORES > 0 {
+    if app_settings.num_cores > 0 {
         rayon::ThreadPoolBuilder::new()
-            .num_threads(NUM_CORES as usize)
+            .num_threads(app_settings.num_cores as usize)
             .build_global()
             .expect("Failed to build thread pool");
     }
 
-    for run in 0..NUM_RUNS {
-        run_simulation(run, &settings, &mut db);
+    for run in 0..app_settings.num_runs {
+        run_simulation(run, &app_settings, &mut db);
     }
 
     let duration = start.elapsed();
-    println!("Simulated {} runs in {:?}", NUM_RUNS, duration);
+    println!("Simulated {} runs in {:?}", app_settings.num_runs, duration);
 }
 
 fn show_settings(settings: &AppSettings) {
