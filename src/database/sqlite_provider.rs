@@ -1,7 +1,6 @@
 use crate::database::db_provider::DbProvider;
 use crate::database::entities::cell::Cell;
 use crate::database::entities::cell_position::CellPosition;
-use crate::database::entities::inflation_snapshot::InflationSnapshot;
 use crate::database::entities::structure_particle::StructureParticle;
 use crate::enums::LogLevel;
 use rusqlite::{Connection, Result, params};
@@ -60,39 +59,6 @@ impl DbProvider for SqliteProvider {
         }
         tx.commit()?;
         Ok(())
-    }
-
-    fn load_inflation_snapshots(&self) -> Result<Vec<InflationSnapshot>> {
-        let mut stmt = self.conn.prepare(
-            "select timestep,
-                    avg(scale_factor) as scale_factor,
-                    avg(rip_strength) as rip_strength,
-                    avg(matter_density) as average_density,
-                    avg(curvature) as average_curvature,
-                    sum(case when is_black_hole then 1 else 0 end) as black_hole_count
-             from cell
-             group by timestep
-             order by timestep",
-        )?;
-
-        let rows = stmt.query_map([], |row| {
-            Ok(InflationSnapshot {
-                timestep: row.get(0)?,
-                scale_factor: row.get(1)?,
-                rip_strength: row.get(2)?,
-                average_density: row.get(3)?,
-                average_curvature: row.get(4)?,
-                black_hole_count: row.get(5)?,
-                gravity_well_sum: row.get(6)?,
-            })
-        })?;
-
-        let mut snapshots = Vec::new();
-        for snapshot in rows {
-            snapshots.push(snapshot?);
-        }
-
-        Ok(snapshots)
     }
 
     fn record_rip_field_summary(

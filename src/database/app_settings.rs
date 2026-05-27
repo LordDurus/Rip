@@ -1,6 +1,7 @@
 use rusqlite::{Connection, Result};
 use std::collections::HashMap;
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum AppValue {
     Float(f64),
@@ -13,6 +14,7 @@ pub enum AppValue {
 #[derive(Debug)]
 /// Holds configuration settings for the cosmological simulation.
 pub struct AppSettings {
+    /*
     /// Total initial mass of each galaxy in solar masses.
     pub initial_mass: f64,
     /// Initial mass of the central black hole in each galaxy (solar masses).
@@ -23,17 +25,18 @@ pub struct AppSettings {
     pub sim_duration: usize,
     /// Number of galaxies simulated per run.
     pub num_galaxies: usize,
+    */
     /// Gravitational constant used in force calculations.
     pub gravity: f64,
     /// Speed of light constant.    
     pub light_speed: f64,
     /// Legacy decay factor for initial experiments (may be deprecated).
     pub decay_factor: f64,
-    /// Initial strength of the rip field before inflation effects.
+    /// Initial strength of the rip location before inflation effects.
     pub rip_initial: f64,
-    /// Controls the exponential growth of the rip field during inflation.
+    /// Controls the exponential growth of the rip location during inflation.
     pub rip_decay_rate: f64,
-    /// Minimum floor for rip field strength to prevent collapse to zero.
+    /// Minimum floor for rip location strength to prevent collapse to zero.
     pub rip_minimum_strength: f64,
     /// Duration of a single simulation step, in arbitrary time units.
     pub time_step_size: f64,
@@ -59,18 +62,22 @@ pub struct AppSettings {
     pub structure_num_particles: usize,
     /// Suppress logging/output if true.
     pub quiet: bool,
-    /// Weight of curvature's influence on local rip field amplification.
+    /// Weight of curvature's influence on local rip location amplification.
     pub rip_curvature_weight: f64,
-    /// Weight of matter density's influence on local rip field amplification.
+    /// Weight of matter density's influence on local rip location amplification.
     pub rip_density_weight: f64,
-    /// Controls the long-term exponential decay (self-healing) of the rip field.
+    /// Controls the long-term exponential decay (self-healing) of the rip location.
     pub rip_evaporation_rate: f64,
     /// Number of independent simulation runs.
     pub num_runs: usize,
-    /// Time step per simulation update (millions of years).
+
+    /*
+    /// Time step per simulation update (millions of years).///
     pub time_step: usize,
+    */
     /// Number of CPU cores to use (-1 = all available).
     pub num_cores: isize,
+    /*
     /// Equation of State parameter (w) describes the pressure-to-density ratio.
     /// Different types of cosmic "stuff" have characteristic w values:
     ///
@@ -83,6 +90,7 @@ pub struct AppSettings {
     ///
     /// Setting w = -1 models dark energy with constant density causing accelerated expansion.
     pub dark_energy: f64,
+    */
 }
 
 impl AppSettings {
@@ -189,16 +197,17 @@ impl AppSettings {
             // time_step: get_usize("TIME_STEP"),
             // num_cores: get_isize("NUM_CORES"),
             // W_DARK_ENERGY: get_f64("W_DARK_ENERGY"),
+            /*
             sim_duration: 13_800,
             initial_mass: 1.0e12,
             initial_bh_mass: 0.0,
             matter_fadeout_time_myr: 5000.0,
             num_galaxies: 1_000_000,
+            */
             num_runs: 50,
-            time_step: 100,
+            // time_step: 100,
             num_cores: -1,
-            dark_energy: -1.0,
-
+            // dark_energy: -1.0,
             gravity: get_f64("GRAVITY"),
             light_speed: get_f64("LIGHT_SPEED"),
             decay_factor: get_f64("DECAY_FACTOR"),

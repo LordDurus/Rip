@@ -1,5 +1,6 @@
 use crate::database::entities::cell_position::CellPosition;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Cell {
     /// Unique identifier for this cell in the database
