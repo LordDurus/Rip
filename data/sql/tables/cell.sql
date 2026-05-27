@@ -1,0 +1,22 @@
+create table if not exists cell (
+    cell_id integer primary key,
+    cell_position_id integer not null,
+    timestep integer,
+    layer integer,
+    curvature real,
+    matter_density real,
+    is_black_hole integer,
+    rip_strength real,
+    black_hole_id integer,
+    scale_factor real,
+    gravity_x real,
+    gravity_y real,
+    gravity_z real,
+    dimple_strength real,
+    is_lensing_candidate int default 0,
+    is_supermassive int default 0,
+    mass real,
+    smbh_rip_contribution real,
+    is_rip_induced int default 0,    
+    foreign key(cell_position_id) references cell_position(cell_position_id)
+);

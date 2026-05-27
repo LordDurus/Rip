@@ -1,0 +1,22 @@
+# ===== Rust / Cargo =====
+# Compiled files and executables
+/target
+debug
+*.pdb              # MSVC debug info
+**/*.rs.bk         # rustfmt backups
+**/mutants.out*/   # cargo mutants
+
+# ===== IDE / Editor =====
+# RustRover / JetBrains — see https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+#.idea/
+
+# ===== Project data =====
+assets/history/
+**/data/simulation.csv
+**/data/inflation.csv
+**/data/inflation.csv.gz
+**/data/structure.csv.gz
+**/post.csv
+**/post.csv.gz
+**/*.mp4
+**/rip_data.db
