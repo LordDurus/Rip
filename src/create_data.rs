@@ -4,11 +4,13 @@ use crate::LogLevel;
 use crate::create_data::f64::consts::PI;
 use crate::database::entities::cell::Cell;
 use crate::database::entities::structure_particle::StructureParticle;
+use crate::gravity::compute_gravity_fft;
 use crate::initial_geometry::InitialGeometry;
 use crate::populate_grid::populate_grid;
 use indicatif::ProgressBar;
 use rand::Rng;
 // use rand::rngs::StdRng;
+// use crate::gravity::compute_gravity_fft;
 use crate::rip_helpers::RipDecayMechanism;
 use crate::rip_helpers::compute_cell_rip_strength;
 use rayon::prelude::*;
@@ -216,7 +218,6 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                         cell.is_rip_induced = false;
                     }
 
-                    // let gravity_magnitude = (cell.gravity_x.powi(2) + cell.gravity_y.powi(2) + cell.gravity_z.powi(2)).sqrt();
                     if !cell.is_black_hole && cell.rip_strength > app_settings.rip_induced_threshold {
                         set_as_black_hole(cell, &next_black_hole_id);
                         cell.is_rip_induced = true;
@@ -227,7 +228,26 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                     raw[height][width][depth] = cell.matter_density;
                     drop(raw); // unlock the mutex manually before continuing
 
-                    cell.compute_gravity_from_density(height, width, depth, &raw_density.lock().unwrap(), app_settings.inf_grid_width, app_settings.inf_grid_height, app_settings.inf_grid_depth);
+                    // cell.compute_gravity_from_density(height, width, depth, &raw_density.lock().unwrap(), app_settings.inf_grid_width, app_settings.inf_grid_height, app_settings.inf_grid_depth);
+                });
+            });
+        });
+
+        // After the grid par_iter_mut block, before the particle loop:
+        let density_snapshot = {
+            let raw = raw_density.lock().unwrap();
+            raw.clone()
+        };
+
+        let (gx, gy, gz) = compute_gravity_fft(&density_snapshot, app_settings.gravity, app_settings.inf_grid_height, app_settings.inf_grid_width, app_settings.inf_grid_depth);
+
+        // Write gravity back to cells
+        grid.par_iter_mut().enumerate().for_each(|(h, col)| {
+            col.iter_mut().enumerate().for_each(|(w, row)| {
+                row.iter_mut().enumerate().for_each(|(d, cell)| {
+                    cell.gravity_x = gx[h][w][d];
+                    cell.gravity_y = gy[h][w][d];
+                    cell.gravity_z = gz[h][w][d];
                 });
             });
         });

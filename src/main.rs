@@ -14,6 +14,7 @@ use crate::enums::LogLevel;
 mod create_data;
 mod database;
 mod enums;
+mod gravity;
 mod initial_geometry;
 mod populate_grid;
 mod rip_helpers;

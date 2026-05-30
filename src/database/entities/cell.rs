@@ -81,30 +81,4 @@ impl Cell {
         self.matter_density = self.matter_density.max(0.0);
         self.curvature = self.curvature.max(0.0);
     }
-
-    #[inline(always)]
-    pub fn compute_gravity_from_density(&mut self, height: usize, width: usize, depth: usize, raw_density: &Vec<Vec<Vec<f64>>>, grid_width: usize, grid_height: usize, grid_depth: usize) {
-        let dx = if width > 0 && width + 1 < grid_width {
-            (raw_density[height][width + 1][depth] - raw_density[height][width - 1][depth]) / 2.0
-        } else {
-            0.0
-        };
-
-        let dy = if height > 0 && height + 1 < grid_height {
-            (raw_density[height + 1][width][depth] - raw_density[height - 1][width][depth]) / 2.0
-        } else {
-            0.0
-        };
-
-        let dz = if depth > 0 && depth + 1 < grid_depth {
-            (raw_density[height][width][depth + 1] - raw_density[height][width][depth - 1]) / 2.0
-        } else {
-            0.0
-        };
-
-        // negative gradient = pull toward higher density
-        self.gravity_x = -dx;
-        self.gravity_y = -dy;
-        self.gravity_z = -dz;
-    }
 }
