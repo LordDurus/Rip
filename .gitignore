@@ -19,4 +19,4 @@ assets/history/
 **/post.csv
 **/post.csv.gz
 **/*.mp4
-**/rip_data.*
+**/rip_data.* 
