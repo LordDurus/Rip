@@ -116,8 +116,11 @@ fn set_as_black_hole(cell: &mut Cell, next_black_hole_id: &Arc<Mutex<u64>>) {
     drop(id);
 
     // mark as singularity; normal density rules do not apply
-    cell.matter_density = f64::MAX;
-    cell.dimple_strength = f64::MAX;
+    // cell.matter_density = f64::MAX;
+    // cell.dimple_strength = f64::MAX;
+
+    cell.matter_density = 1.0e30; // big but doesn't break arithmetic
+    cell.dimple_strength = 1.0e30;
 }
 
 pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Box<dyn std::error::Error>> {
