@@ -235,7 +235,7 @@ impl AppSettings {
             matter_fadeout_time_myr: 5000.0,
             num_galaxies: 1_000_000,
             */
-            num_runs: 50,
+            num_runs: get_usize("NUM_RUNS"),
             // time_step: 100,
             num_cores: get_u32("NUM_CORES"),
             // dark_energy: -1.0,

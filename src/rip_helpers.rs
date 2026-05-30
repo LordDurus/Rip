@@ -91,10 +91,10 @@ pub fn compute_cell_rip_strength(timestep: usize, cell: &Cell, settings: &AppSet
 
     let ramp = 1.0 - f64::exp(-settings.rip_decay_rate * timestep as f64);
     let healing = 1.0 / (1.0 + cell.curvature + cell.matter_density);
-    let global_rip_strength = settings.rip_initial * ramp * healing;
+    let rip_strength = settings.rip_initial * ramp * healing;
     let modifier = 1.0 + settings.rip_curvature_weight * cell.curvature + settings.rip_density_weight * cell.matter_density;
 
-    let natural_strength = global_rip_strength * modifier;
+    let natural_strength = rip_strength * modifier;
 
     // Apply mechanism-based decay
     let decay = compute_rip_decay(decay_mechanism, cell, natural_strength, timestep, step_duration);
