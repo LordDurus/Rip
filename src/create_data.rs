@@ -205,24 +205,22 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                     }
                     cell.timestep = timestep;
 
-            
-
                     cell.rip_strength = compute_cell_rip_strength(timestep, cell, &app_settings, &decay_mechanism, STEP_DURATION);
 
                     cell.scale_factor = scale_factor;
 
-                    if !cell.is_black_hole {
-                        if cell.curvature > app_settings.curvature_threshold && cell.matter_density > app_settings.collapse_density_threshold {
-                            set_as_black_hole(cell, &next_black_hole_id);
-                            cell.is_rip_induced = false;
-                        } else if cell.rip_strength > app_settings.rip_induced_threshold {
-                            set_as_black_hole(cell, &next_black_hole_id);
-                            cell.is_rip_induced = true;
-                        }
-                    } else {
-cell.apply_gravity_interaction();
+                    cell.apply_gravity_interaction();
+
+                    if cell.curvature > app_settings.curvature_threshold && cell.matter_density > app_settings.collapse_density_threshold {
+                        set_as_black_hole(cell, &next_black_hole_id);
+                        cell.is_rip_induced = false;
                     }
 
+                    // let gravity_magnitude = (cell.gravity_x.powi(2) + cell.gravity_y.powi(2) + cell.gravity_z.powi(2)).sqrt();
+                    if !cell.is_black_hole && cell.rip_strength > app_settings.rip_induced_threshold {
+                        set_as_black_hole(cell, &next_black_hole_id);
+                        cell.is_rip_induced = true;
+                    }
                     cell.mass = cell.matter_density * cell.volume;
 
                     let mut raw = raw_density.lock().unwrap();
@@ -245,8 +243,9 @@ cell.apply_gravity_interaction();
                             let gravity_magnitude = (cell.gravity_x.powi(2) + cell.gravity_y.powi(2) + cell.gravity_z.powi(2)).sqrt();
 
                             if cell.is_black_hole || gravity_magnitude > MAX_DIMPLE_NON_BH {
+                                let already_bh = cell.is_black_hole;
                                 set_as_black_hole(cell, &next_black_hole_id);
-                                if !cell.is_black_hole {
+                                if !already_bh {
                                     cell.is_rip_induced = true;
                                 }
                             } else {
