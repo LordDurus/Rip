@@ -4,19 +4,20 @@ use crate::LogLevel;
 use crate::create_data::f64::consts::PI;
 use crate::database::entities::cell::Cell;
 use crate::database::entities::structure_particle::StructureParticle;
+use crate::initial_geometry::InitialGeometry;
+use crate::populate_grid::populate_grid;
 use indicatif::ProgressBar;
 use rand::Rng;
-use rand::rngs::ThreadRng;
+// use rand::rngs::StdRng;
+use crate::rip_helpers::RipDecayMechanism;
+use crate::rip_helpers::compute_cell_rip_strength;
 use rayon::prelude::*;
 use std::f64;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-fn initialize_particles(
-    rng: &mut ThreadRng,
-    positions: &mut Vec<(f64, f64, f64)>,
-    velocities: &mut Vec<(f64, f64, f64)>,
-) {
+fn initialize_particles(positions: &mut Vec<(f64, f64, f64)>, velocities: &mut Vec<(f64, f64, f64)>) {
+    let mut rng = rand::thread_rng();
     for i in 0..positions.len() {
         let theta = rng.gen_range(0.0..2.0 * PI);
         let phi = rng.gen_range(0.0..PI);
@@ -36,12 +37,7 @@ fn initialize_particles(
 }
 
 #[inline(always)]
-fn compute_scale_factor(
-    scale: f64,
-    timestep: usize,
-    settings: &AppSettings,
-    step_duration: f64,
-) -> f64 {
+fn compute_scale_factor(scale: f64, timestep: usize, settings: &AppSettings, step_duration: f64) -> f64 {
     let ramp = 1.0 - f64::exp(-settings.rip_decay_rate * timestep as f64);
     let decay = f64::exp(-settings.rip_evaporation_rate * timestep as f64);
     let healing = 1.0; // placeholder if I later want global curvature/density influence
@@ -55,21 +51,13 @@ fn compute_scale_factor(
 }
 
 #[inline(always)]
-fn apply_gravity_to_particle(
-    particle: &mut StructureParticle,
-    gravity: (f64, f64, f64),
-    timestep: f64,
-) {
+fn apply_gravity_to_particle(particle: &mut StructureParticle, gravity: (f64, f64, f64), timestep: f64) {
     // apply gravity to velocity
     particle.velocity_x += gravity.0 * timestep;
     particle.velocity_y += gravity.1 * timestep;
     particle.velocity_z += gravity.2 * timestep;
 
-    for coord in [
-        &mut particle.velocity_x,
-        &mut particle.velocity_y,
-        &mut particle.velocity_z,
-    ] {
+    for coord in [&mut particle.velocity_x, &mut particle.velocity_y, &mut particle.velocity_z] {
         if !coord.is_finite() {
             *coord = 0.0;
         }
@@ -82,14 +70,7 @@ fn apply_gravity_to_particle(
 }
 
 #[inline(always)]
-pub fn map_particle_to_cell(
-    x: f64,
-    y: f64,
-    z: f64,
-    grid_width: usize,
-    grid_height: usize,
-    grid_depth: usize,
-) -> Option<(usize, usize, usize)> {
+pub fn map_particle_to_cell(x: f64, y: f64, z: f64, grid_width: usize, grid_height: usize, grid_depth: usize) -> Option<(usize, usize, usize)> {
     if !(x >= -1.0 && x <= 1.0 && y >= -1.0 && y <= 1.0 && z >= -1.0 && z <= 1.0) {
         return None; // out of bounds
     }
@@ -98,28 +79,15 @@ pub fn map_particle_to_cell(
     let row = ((y + 1.0) / 2.0 * grid_height as f64).floor() as usize;
     let layer = ((z + 1.0) / 2.0 * grid_depth as f64).floor() as usize;
 
-    if col < grid_width && row < grid_height && layer < grid_depth {
-        Some((col, row, layer))
-    } else {
-        None
-    }
+    if col < grid_width && row < grid_height && layer < grid_depth { Some((col, row, layer)) } else { None }
 }
 
-fn seed_initial_curvature(
-    grid: &mut Vec<Vec<Vec<Cell>>>,
-    settings: &AppSettings,
-    db: &mut dyn DbProvider,
-) {
-    let progress_bar: ProgressBar = ProgressBar::new(
-        (settings.inf_grid_height * settings.inf_grid_width * settings.inf_grid_depth) as u64,
-    );
+fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSettings, db: &mut dyn DbProvider) {
+    let progress_bar: ProgressBar = ProgressBar::new((settings.inf_grid_height * settings.inf_grid_width * settings.inf_grid_depth) as u64);
 
     let mut current_id: i64 = 1;
     let mut rng = rand::thread_rng();
-    let mut id_lookup = vec![
-        vec![vec![-1i64; settings.inf_grid_depth]; settings.inf_grid_height];
-        settings.inf_grid_width
-    ];
+    let mut id_lookup = vec![vec![vec![-1i64; settings.inf_grid_depth]; settings.inf_grid_height]; settings.inf_grid_width];
 
     // phase 2: assign curvature and neighbors
     for height in 0..settings.inf_grid_height {
@@ -140,19 +108,6 @@ fn seed_initial_curvature(
     progress_bar.finish_with_message("Seeding simulation complete.");
 }
 
-#[inline(always)]
-fn compute_cell_rip_strength(timestep: usize, cell: &Cell, settings: &AppSettings) -> f64 {
-    let ramp = 1.0 - f64::exp(-settings.rip_decay_rate * timestep as f64);
-    let healing = 1.0 / (1.0 + cell.curvature + cell.matter_density);
-    let decay = f64::exp(-settings.rip_evaporation_rate * timestep as f64);
-    let global_rip_strength = settings.rip_initial * ramp * decay * healing;
-    let modifier = 1.0
-        + settings.rip_curvature_weight * cell.curvature
-        + settings.rip_density_weight * cell.matter_density;
-
-    return (global_rip_strength * modifier).clamp(settings.rip_minimum_strength, 1.0e6);
-}
-
 fn set_as_black_hole(cell: &mut Cell, next_black_hole_id: &Arc<Mutex<u64>>) {
     cell.is_black_hole = true;
     let mut id = next_black_hole_id.lock().unwrap();
@@ -165,12 +120,16 @@ fn set_as_black_hole(cell: &mut Cell, next_black_hole_id: &Arc<Mutex<u64>>) {
     cell.dimple_strength = f64::MAX;
 }
 
-pub fn run(
-    app_settings: &AppSettings,
-    db: &mut dyn DbProvider,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Box<dyn std::error::Error>> {
     const STEP_DURATION: f64 = 0.01;
     const MAX_DIMPLE_NON_BH: f64 = 1e4; // adjust based on simulation scale
+    const MODULE: &str = "create_data->run";
+
+    let seed: u64 = rand::thread_rng().r#gen(); // or `rand::random::<u64>()`
+    let run = db.start_run(seed, Some("baseline")).expect("Failed to start run");
+
+    // Use the same seed for reproducible randomness
+    // let mut geo_rng = StdRng::seed_from_u64(seed);
 
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
@@ -180,19 +139,24 @@ pub fn run(
         r.store(false, Ordering::SeqCst);
     })?;
 
-    let mut grid =
-        vec![
-            vec![vec![Cell::new(); app_settings.inf_grid_depth]; app_settings.inf_grid_width];
-            app_settings.inf_grid_height
-        ];
+    let mut grid = vec![vec![vec![Cell::new(); app_settings.inf_grid_depth]; app_settings.inf_grid_width]; app_settings.inf_grid_height];
 
     seed_initial_curvature(&mut grid, &app_settings, db);
 
     let num_particles = app_settings.structure_num_particles;
-    let mut rng = rand::thread_rng();
     let mut positions = vec![(0.0, 0.0, 0.0); num_particles];
     let mut velocities = vec![(0.0, 0.0, 0.0); num_particles];
-    initialize_particles(&mut rng, &mut positions, &mut velocities);
+    initialize_particles(&mut positions, &mut velocities);
+
+    let geometry = InitialGeometry::from_settings(app_settings);
+    let decay_mechanism = RipDecayMechanism::from_settings(app_settings);
+
+    if let Err(err) = populate_grid(&geometry, &mut grid, db) {
+        let message = format!("failed to populate initial geometry: {err}");
+        _ = db.log_message(run.run_id, MODULE, LogLevel::Error, &message);
+        _ = db.fail_run(run.run_id, message);
+        return Err(err.into());
+    }
 
     let mut particles: Vec<StructureParticle> = positions
         .iter()
@@ -210,13 +174,7 @@ pub fn run(
         })
         .collect();
 
-    let raw_density = Arc::new(Mutex::new(vec![
-        vec![
-            vec![0.0; app_settings.inf_grid_depth];
-            app_settings.inf_grid_width
-        ];
-        app_settings.inf_grid_height
-    ]));
+    let raw_density = Arc::new(Mutex::new(vec![vec![vec![0.0; app_settings.inf_grid_depth]; app_settings.inf_grid_width]; app_settings.inf_grid_height]));
 
     let next_black_hole_id: Arc<Mutex<u64>> = Arc::new(Mutex::new(1));
     let mut scale_factor = 1.0;
@@ -232,13 +190,6 @@ pub fn run(
         }
 
         progress_bar.inc(1);
-        /*
-        -- Old
-        let ramp = 1.0 - f64::exp(-settings.rip_decay_rate * timestep as f64);
-        let global_rip_strength = settings.rip_initial * ramp;
-        scale_factor *= f64::exp(global_rip_strength.sqrt() * STEP_DURATION);
-        */
-
         scale_factor = compute_scale_factor(scale_factor, timestep, &app_settings, STEP_DURATION);
 
         grid.par_iter_mut().enumerate().for_each(|(height, col)| {
@@ -252,55 +203,39 @@ pub fn run(
                     cell.timestep = timestep;
                     cell.apply_gravity_interaction();
 
-                    cell.rip_strength = compute_cell_rip_strength(timestep, cell, &app_settings);
+                    cell.rip_strength = compute_cell_rip_strength(timestep, cell, &app_settings, &decay_mechanism, STEP_DURATION);
 
                     cell.scale_factor = scale_factor;
 
-                    if !cell.is_black_hole
-                        && cell.curvature > app_settings.curvature_threshold
-                        && cell.matter_density > app_settings.collapse_density_threshold
-                    {
-                        set_as_black_hole(cell, &next_black_hole_id);
+                    if !cell.is_black_hole {
+                        if cell.curvature > app_settings.curvature_threshold && cell.matter_density > app_settings.collapse_density_threshold {
+                            set_as_black_hole(cell, &next_black_hole_id);
+                            cell.is_rip_induced = false;
+                        } else if cell.rip_strength > app_settings.rip_induced_threshold {
+                            set_as_black_hole(cell, &next_black_hole_id);
+                            cell.is_rip_induced = true;
+                        }
                     }
-
                     cell.mass = cell.matter_density * cell.volume;
 
                     let mut raw = raw_density.lock().unwrap();
                     raw[height][width][depth] = cell.matter_density;
                     drop(raw); // unlock the mutex manually before continuing
 
-                    cell.compute_gravity_from_density(
-                        height,
-                        width,
-                        depth,
-                        &raw_density.lock().unwrap(),
-                        app_settings.inf_grid_width,
-                        app_settings.inf_grid_height,
-                        app_settings.inf_grid_depth,
-                    );
+                    cell.compute_gravity_from_density(height, width, depth, &raw_density.lock().unwrap(), app_settings.inf_grid_width, app_settings.inf_grid_height, app_settings.inf_grid_depth);
                 });
             });
         });
 
         for particle in &mut particles {
-            if let Some((col_idx, row_idx, depth_idx)) = map_particle_to_cell(
-                particle.position_x,
-                particle.position_y,
-                particle.position_z,
-                app_settings.inf_grid_height,
-                app_settings.inf_grid_width,
-                app_settings.inf_grid_depth,
-            ) {
+            if let Some((col_idx, row_idx, depth_idx)) = map_particle_to_cell(particle.position_x, particle.position_y, particle.position_z, app_settings.inf_grid_height, app_settings.inf_grid_width, app_settings.inf_grid_depth) {
                 if let Some(col) = grid.get_mut(col_idx) {
                     if let Some(row) = col.get_mut(row_idx) {
                         if let Some(cell) = row.get_mut(depth_idx) {
                             let gravity = (cell.gravity_x, cell.gravity_y, cell.gravity_z);
                             apply_gravity_to_particle(particle, gravity, STEP_DURATION);
 
-                            let gravity_magnitude = (cell.gravity_x.powi(2)
-                                + cell.gravity_y.powi(2)
-                                + cell.gravity_z.powi(2))
-                            .sqrt();
+                            let gravity_magnitude = (cell.gravity_x.powi(2) + cell.gravity_y.powi(2) + cell.gravity_z.powi(2)).sqrt();
 
                             if cell.is_black_hole || gravity_magnitude > MAX_DIMPLE_NON_BH {
                                 set_as_black_hole(cell, &next_black_hole_id);
@@ -318,22 +253,23 @@ pub fn run(
 
         if let Err(err) = db.insert_particle_batch(&particles) {
             let message = format!("failed to insert particle batch: {err}");
-            let _ = db.log_message("structure", LogLevel::Error, &message);
+            _ = db.log_message(run.run_id, MODULE, LogLevel::Error, &message);
+            _ = db.fail_run(run.run_id, message);
             return Err(err.into());
         }
 
-        db.save_all_cells(&mut grid).expect("Error saving cells");
-        db.record_rip_field_summary(timestep, 100.0, &grid)
-            .expect("failed to record rip field summary");
+        db.save_all_cells(run.run_id, &mut grid).expect("Error saving cells");
+        db.record_timestep_summary(timestep, 100.0, &grid, run.run_id).expect("failed to record rip field summary");
     }
-    let count = grid
-        .iter()
-        .flat_map(|col| col.iter())
-        .flat_map(|row| row.iter())
-        .filter(|cell| cell.is_black_hole)
-        .count();
+    let count = grid.iter().flat_map(|col| col.iter()).flat_map(|row| row.iter()).filter(|cell| cell.is_black_hole).count();
 
     progress_bar.finish_with_message("Inflation simulation complete.");
-    dbg!("Black holes created: {}", count);
+    println!("Black holes created: {}", count);
+
+    if let Err(err) = db.complete_run(run.run_id) {
+        let message = format!("failed to complete run: {err}");
+        let _ = db.log_message(run.run_id, MODULE, LogLevel::Error, &message);
+    }
+
     return Ok(());
 }

@@ -1,26 +1,48 @@
 {
-		"version": "0.2.0",
-		"configurations": [
-			{
-				"name": "QB64 Build and Run",
-				"type": "QB64",
-				"request": "launch",
-				"command": "${config:qb64.compilerPath} -x \"${fileDirname}\\${fileBasename}\" -o \"${fileDirname}\\${fileBasenameNoExtension}.exe\"  -x; if ($?) { cd \"${fileDirname}\"; start \"${fileDirname}\\${fileBasenameNoExtension}.exe\"}",	
-				"terminalName": "QB64",
-				"terminalIndex": -1, 
-				"showTerminal": true,
-				"linux": {
-					"name": "QB64 Build and Run",
-					"type": "QB64",
-					"request": "launch",					
-					"command": "${config:qb64.compilerPath} '${fileDirname}/${fileBasename}' -x -o '${fileDirname}/${fileBasenameNoExtension}' && '${fileDirname}/${fileBasenameNoExtension}'",
-				},
-				"osx": {
-					"name": "QB64 Build and Run",
-					"type": "QB64",
-					"request": "launch",
-					"command": "${config:qb64.compilerPath} '${fileDirname}/${fileBasename}' -x -o '${fileDirname}/${fileBasenameNoExtension}'; mv '${fileDirname}/${fileBasenameNoExtension}' '${fileDirname}/${fileBasenameNoExtension}.run'; '${fileDirname}/${fileBasenameNoExtension}.run'",
+	// Use IntelliSense to learn about possible attributes.
+	// Hover to view descriptions of existing attributes.
+	// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Debug executable",
+			"preLaunchTask": "clear terminal",
+			"cargo": {
+				"args": [
+					"build",
+					"--bin=rip",
+					"--package=rip"
+				],
+				"filter": {
+					"name": "rip",
+					"kind": "bin"
 				}
-			} 
-		]
-	}
+			},
+			"args": [],
+			"cwd": "${workspaceFolder}",
+			"terminal": "integrated"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Debug unit tests in executable",
+			"cargo": {
+				"args": [
+					"test",
+					"--no-run",
+					"--bin=rip",
+					"--package=rip"
+				],
+				"filter": {
+					"name": "rip",
+					"kind": "bin"
+				}
+			},
+			"args": [],
+			"cwd": "${workspaceFolder}",
+			"terminal": "integrated"
+		}
+	]
+}

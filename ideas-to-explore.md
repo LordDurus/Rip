@@ -47,3 +47,43 @@ A running list of hypotheses and directions to investigate once the core simulat
 - If rips store information holographically, does that constrain what rips can do or where they can form?
 
 ---
+
+## Universal constants as a function of parent geometry
+
+**Hypothesis:** The fundamental constants of a universe (gravitational constant, speed of light, dark matter ratio, etc.) aren't arbitrary — they're determined by the initial geometry of the matter distribution that formed the parent black hole. Different pre-collapse geometries in the parent universe produce different physics in the resulting child universe.
+
+**Why it's interesting:** This provides a *mechanism* for the multiverse explanation of fine-tuning, rather than treating "many universes with random constants" as a brute postulate. The variation in constants becomes a consequence of the variation in pre-collapse matter arrangements — something the simulation can actually model and test, since you're already parametrizing both initial geometry and physics constants. If certain geometry → constant relationships are stable across runs, that's a real, testable mapping.
+
+It also ties together three threads already in play: the universe-inside-a-black-hole picture, the initial-geometry parameter sweep, and the per-universe rolled physics constants. Currently those are independent knobs in the simulation; this hypothesis says they're causally linked.
+
+**Things to think through when revisiting:**
+- Does the simulation show any stable correlation between initial geometry parameters and emergent large-scale behavior? (E.g., do Perlin-noise universes settle into different effective constants than Gaussian-blob universes?)
+- What would be the "translation function" between parent geometry and child constants? Is it the total mass, the entropy, the angular momentum, the topology of the collapsing region?
+- Does this make fine-tuning *less* mysterious or *more*? On one hand it grounds the multiverse explanation in a mechanism; on the other, it raises the question of why the parent universe's geometry distribution is what it is.
+- Connection to the antimatter/rip hypothesis — if parent geometry sets rip behavior, and rip behavior affects matter/antimatter dynamics, then geometric variation predicts variation in baryogenesis efficiency across universes.
+- Testable from inside our universe? Probably not directly, but indirect signatures might exist if our constants encode information about a specific parent geometry.
+- Practical: this argues for the simulation eventually doing the inverse problem — given a target set of constants, what parent geometries produce them? Could narrow down what our parent black hole "looked like."
+
+---
+
+## Proper long-range gravity via Poisson solver
+
+**Deferred work, not a hypothesis.** Currently `compute_gravity_from_density` only looks at immediate grid neighbors — gravity is treated as a local stencil rather than the long-range force it actually is. This is fine as a placeholder but means cells "feel" only their adjacent neighbors, which doesn't match how gravity works at any real scale.
+
+**The fix:** Solve `∇²φ = 4πGρ` (Poisson's equation) for the gravitational potential across the grid, then take its gradient to get the gravity vector field. Standard approach in cosmological N-body sims. Done in Fourier space via FFT, it's `O(N³ log N)` per timestep, which is tractable on a 64³ grid. The `rustfft` crate handles the FFT part cleanly.
+
+**Why it matters:**
+- Captures all-pairs gravity, not just adjacent-cell pulls
+- Eliminates artifacts at grid boundaries from the local-stencil approximation
+- Makes the simulation actually comparable to standard cosmological codes
+- May affect tuning of every other parameter, since current dynamics are running on a different physics
+
+**When to revisit:** After current rip/decay/scale-factor dynamics are stable and producing sensible behavior. The current process needs to be a known baseline first, otherwise switching to proper gravity makes it impossible to tell whether new behavior comes from better physics or from some other tuning shift happening at the same time.
+
+**Things to think through:**
+- Boundary conditions: periodic (universe wraps around), zero-padded (universe sits in empty space), or something else? Each gives different behavior.
+- Does the rip field also need long-range treatment, or is it conceptually local? Probably depends on which decay mechanism is chosen.
+- The `cell.gravity_x/y/z` storage stays the same; only the computation changes.
+- Existing tuning (curvature_threshold, density thresholds, weights) will likely need recalibration after the switch.
+
+---

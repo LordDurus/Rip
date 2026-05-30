@@ -1,5 +1,17 @@
 {
 	"files.associations": {
 		"*.sql": "sqlite"
-	}
+	},
+	"cSpell.words": [
+		"dtype",
+		"flate",
+		"indicatif",
+		"ltrim",
+		"Perlin",
+		"rngs",
+		"rtrim",
+		"rusqlite",
+		"serde",
+		"smbh"
+	]
 }

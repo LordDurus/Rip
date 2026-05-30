@@ -49,11 +49,7 @@ impl Cell {
     pub fn new() -> Self {
         Self {
             cell_id: 0,
-            position: CellPosition {
-                col: 0,
-                row: 0,
-                cell_position_id: 0,
-            },
+            position: CellPosition { col: 0, row: 0, cell_position_id: 0 },
             layer: 0,
             timestep: 0,
             rip_strength: 0.0,
@@ -82,16 +78,7 @@ impl Cell {
     }
 
     #[inline(always)]
-    pub fn compute_gravity_from_density(
-        &mut self,
-        height: usize,
-        width: usize,
-        depth: usize,
-        raw_density: &Vec<Vec<Vec<f64>>>,
-        grid_width: usize,
-        grid_height: usize,
-        grid_depth: usize,
-    ) {
+    pub fn compute_gravity_from_density(&mut self, height: usize, width: usize, depth: usize, raw_density: &Vec<Vec<Vec<f64>>>, grid_width: usize, grid_height: usize, grid_depth: usize) {
         let dx = if width > 0 && width + 1 < grid_width {
             (raw_density[height][width + 1][depth] - raw_density[height][width - 1][depth]) / 2.0
         } else {

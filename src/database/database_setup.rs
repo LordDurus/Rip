@@ -6,8 +6,8 @@ use std::path::Path;
 /// If `force_reset` is true, the existing `rip_data.db` will be deleted.
 /// Returns a Connection to `data/rip_data.db`.
 pub fn setup_database(force_reset: bool) -> Result<Connection> {
-    let source = Path::new("../data/template.db");
-    let target = Path::new("../data/rip_data.db");
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("data/template.db");
+    let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("data/rip_data.db");
 
     if force_reset && target.exists() {
         fs::remove_file(&target).unwrap();

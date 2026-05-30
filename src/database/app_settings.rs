@@ -11,6 +11,7 @@ pub enum AppValue {
     String(String),
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 /// Holds configuration settings for the cosmological simulation.
 pub struct AppSettings {
@@ -70,13 +71,34 @@ pub struct AppSettings {
     pub rip_evaporation_rate: f64,
     /// Number of independent simulation runs.
     pub num_runs: usize,
-
+    pub initial_geometry: String,
+    // Uniform params
+    /// Constant matter density applied to every cell when geometry is "uniform".
+    pub uniform_density: f64,
+    // --- Gaussian blob params ---
+    /// Number of gaussian density peaks scattered across the grid.
+    pub blob_count: usize,
+    /// Peak matter density at the center of each blob, before falloff.
+    pub blob_peak_density: f64,
+    /// Minimum standard deviation (spread) of a blob, in cell units.
+    pub blob_sigma_min: f64,
+    /// Maximum standard deviation (spread) of a blob, in cell units.
+    pub blob_sigma_max: f64,
+    // --- Perlin params ---
+    /// Number of noise octaves summed; more octaves add finer detail at diminishing amplitude.
+    pub perlin_octaves: u32,
+    /// Base spatial frequency of the noise; higher values produce smaller, denser features.
+    pub perlin_frequency: f64,
+    /// Base amplitude of the first octave, scaling the overall density variation.
+    pub perlin_amplitude: f64,
+    /// Seed for the Perlin generator, making a given noise field reproducible.
+    pub perlin_seed: u32,
     /*
     /// Time step per simulation update (millions of years).///
     pub time_step: usize,
     */
     /// Number of CPU cores to use (-1 = all available).
-    pub num_cores: isize,
+    pub num_cores: u32,
     /*
     /// Equation of State parameter (w) describes the pressure-to-density ratio.
     /// Different types of cosmic "stuff" have characteristic w values:
@@ -91,12 +113,19 @@ pub struct AppSettings {
     /// Setting w = -1 models dark energy with constant density causing accelerated expansion.
     pub dark_energy: f64,
     */
+    pub rip_decay_mechanism: String,
+    pub decay_time_rate: f64,
+    pub decay_healing_base: f64,
+    pub decay_healing_damping: f64,
+    pub decay_matter_rate: f64,
+    pub decay_matter_threshold: f64,
+    pub decay_inverse_rate: f64,
+    pub rip_induced_threshold: f64,
 }
 
 impl AppSettings {
     pub fn load_dynamic(conn: &Connection) -> Result<HashMap<String, AppValue>> {
-        let mut stmt =
-            conn.prepare("select ltrim(rtrim(key)) as key, ltrim(trim(value)) as value, ltrim(rtrim(datatype)) as datatype from app_setting")?;
+        let mut stmt = conn.prepare("select ltrim(rtrim(key)) as key, ltrim(trim(value)) as value, ltrim(rtrim(datatype)) as datatype from app_setting")?;
 
         let settings_iter = stmt.query_map([], |row| {
             let key: String = row.get(0)?;
@@ -107,23 +136,14 @@ impl AppSettings {
                 "f64" => match val.parse::<f64>() {
                     Ok(v) => Ok(AppValue::Float(v)),
                     Err(e) => {
-                        println!(
-                            "Invalid float setting - key: {}, type: f64, value: {:?}",
-                            key, val
-                        );
-                        return Err(rusqlite::Error::FromSqlConversionFailure(
-                            0,
-                            rusqlite::types::Type::Text,
-                            Box::new(e),
-                        ));
+                        println!("Invalid float setting - key: {}, type: f64, value: {:?}", key, val);
+                        return Err(rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)));
                     }
                 },
-                "int" => val.parse::<i64>().map(AppValue::Int).map_err(|e| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        0,
-                        rusqlite::types::Type::Text,
-                        Box::new(e),
-                    )
+                "int" | "i64" => val.parse::<i64>().map(AppValue::Int).map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))),
+                "u32" => val.parse::<u32>().map(|v| AppValue::Int(v as i64)).map_err(|e| {
+                    println!("Invalid u32 setting - key: {}, type: u32, value: {:?}", key, val);
+                    rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
                 }),
                 "bool" => match val.to_lowercase().as_str() {
                     "true" | "1" | "yes" | "y" => Ok(AppValue::Bool(true)),
@@ -131,11 +151,7 @@ impl AppSettings {
                     _ => Err(rusqlite::Error::InvalidQuery), // Or construct custom error
                 },
                 "string" => Ok(AppValue::Text(val)),
-                _other => Err(rusqlite::Error::InvalidColumnType(
-                    0,
-                    dtype.clone(),
-                    rusqlite::types::Type::Text,
-                )),
+                _other => Err(rusqlite::Error::InvalidColumnType(0, dtype.clone(), rusqlite::types::Type::Text)),
             }?;
 
             return Ok((key, parsed));
@@ -173,6 +189,22 @@ impl AppSettings {
             }
         };
 
+        let get_u32 = |key: &str| -> u32 {
+            match map.get(&key.to_uppercase()) {
+                Some(AppValue::Int(v)) => *v as u32,
+                Some(AppValue::Float(v)) => *v as u32,
+                _ => panic!("Missing or invalid u32 setting for key: {}", key),
+            }
+        };
+
+        let get_string = |key: &str| -> String {
+            match map.get(&key.to_uppercase()) {
+                Some(AppValue::Text(v)) => v.clone(),
+                Some(AppValue::String(v)) => v.clone(),
+                _ => panic!("Missing or invalid string setting for key: {}", key),
+            }
+        };
+
         let get_bool = |key: &str| -> bool {
             match map.get(&key.to_uppercase()) {
                 Some(AppValue::Bool(v)) => *v,
@@ -195,7 +227,6 @@ impl AppSettings {
             // NUM_GALAXIES: get_usize("NUM_GALAXIES"),
             // num_runs: get_usize("NUM_RUNS"),
             // time_step: get_usize("TIME_STEP"),
-            // num_cores: get_isize("NUM_CORES"),
             // W_DARK_ENERGY: get_f64("W_DARK_ENERGY"),
             /*
             sim_duration: 13_800,
@@ -206,8 +237,9 @@ impl AppSettings {
             */
             num_runs: 50,
             // time_step: 100,
-            num_cores: -1,
+            num_cores: get_u32("NUM_CORES"),
             // dark_energy: -1.0,
+            rip_induced_threshold: get_f64("RIP_INDUCED_THRESHOLD"),
             gravity: get_f64("GRAVITY"),
             light_speed: get_f64("LIGHT_SPEED"),
             decay_factor: get_f64("DECAY_FACTOR"),
@@ -229,6 +261,23 @@ impl AppSettings {
             rip_curvature_weight: get_f64("RIP_CURVATURE_WEIGHT"),
             rip_density_weight: get_f64("RIP_DENSITY_WEIGHT"),
             rip_evaporation_rate: get_f64("RIP_EVAPORATION_RATE"),
+            initial_geometry: get_string("INITIAL_GEOMETRY"),
+            uniform_density: get_f64("UNIFORM_DENSITY"),
+            blob_count: get_usize("BLOB_COUNT"),
+            blob_peak_density: get_f64("BLOB_PEAK_DENSITY"),
+            blob_sigma_min: get_f64("BLOB_SIGMA_MIN"),
+            blob_sigma_max: get_f64("BLOB_SIGMA_MAX"),
+            perlin_octaves: get_u32("PERLIN_OCTAVES"),
+            perlin_frequency: get_f64("PERLIN_FREQUENCY"),
+            perlin_amplitude: get_f64("PERLIN_AMPLITUDE"),
+            perlin_seed: get_u32("PERLIN_SEED"),
+            rip_decay_mechanism: get_string("RIP_DECAY_MECHANISM"),
+            decay_time_rate: get_f64("DECAY_TIME_RATE"),
+            decay_healing_base: get_f64("DECAY_HEALING_BASE"),
+            decay_healing_damping: get_f64("DECAY_HEALING_DAMPING"),
+            decay_matter_rate: get_f64("DECAY_MATTER_RATE"),
+            decay_matter_threshold: get_f64("DECAY_MATTER_THRESHOLD"),
+            decay_inverse_rate: get_f64("DECAY_INVERSE_RATE"),
         }
     }
 
