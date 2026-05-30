@@ -73,8 +73,13 @@ impl Cell {
 
     #[inline(always)]
     pub fn apply_gravity_interaction(&mut self) {
+        if self.is_black_hole {
+            return;
+        }
         self.matter_density += 0.05 * self.curvature;
         self.curvature += 0.005 * self.matter_density;
+        self.matter_density = self.matter_density.max(0.0);
+        self.curvature = self.curvature.max(0.0);
     }
 
     #[inline(always)]
