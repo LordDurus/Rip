@@ -204,7 +204,8 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                         return;
                     }
                     cell.timestep = timestep;
-                    cell.apply_gravity_interaction();
+
+            
 
                     cell.rip_strength = compute_cell_rip_strength(timestep, cell, &app_settings, &decay_mechanism, STEP_DURATION);
 
@@ -218,7 +219,10 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                             set_as_black_hole(cell, &next_black_hole_id);
                             cell.is_rip_induced = true;
                         }
+                    } else {
+cell.apply_gravity_interaction();
                     }
+
                     cell.mass = cell.matter_density * cell.volume;
 
                     let mut raw = raw_density.lock().unwrap();
