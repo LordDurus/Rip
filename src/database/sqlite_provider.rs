@@ -3,7 +3,7 @@ use crate::database::entities::cell::Cell;
 use crate::database::entities::cell_position::CellPosition;
 use crate::database::entities::run::Run;
 use crate::database::entities::structure_particle::StructureParticle;
-use crate::enums::LogLevel;
+use crate::enums::log_level::LogLevel;
 use rusqlite::{Connection, Result, params};
 
 pub struct SqliteProvider {
@@ -110,6 +110,7 @@ impl DbProvider for SqliteProvider {
         if !buffer.is_empty() {
             Self::insert_batch(&tx, run_id, &buffer)?;
         }
+
         tx.commit()?;
         Ok(())
     }
@@ -184,12 +185,12 @@ impl SqliteProvider {
     fn insert_batch(tx: &rusqlite::Transaction, run_id: i64, cells: &[&Cell]) -> Result<()> {
         let mut stmt = tx.prepare(
             "insert into cell (
-            run_id, cell_position_id, timestep, curvature,
-            matter_density, is_black_hole, rip_strength,
-            black_hole_id, layer, scale_factor,
-            gravity_x, gravity_y, gravity_z, dimple_strength, is_lensing_candidate,
-            is_supermassive, mass, smbh_rip_contribution, is_rip_induced
-        ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+						run_id, cell_position_id, timestep, curvature,
+						matter_density, is_black_hole, rip_strength,
+						black_hole_id, layer, scale_factor,
+						gravity_x, gravity_y, gravity_z, dimple_strength, is_lensing_candidate,
+						is_supermassive, mass, smbh_rip_contribution, is_rip_induced
+				) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
         )?;
         for cell in cells {
             stmt.execute(params![
@@ -211,7 +212,7 @@ impl SqliteProvider {
                 cell.is_supermassive as i32,      // 16
                 cell.mass,                        // 17
                 cell.smbh_rip_contribution,       // 18
-                cell.is_rip_induced,              // 19  ← also fix the duplicate-is_black_hole bug here
+                cell.is_rip_induced,              // 19
             ])?;
         }
         Ok(())

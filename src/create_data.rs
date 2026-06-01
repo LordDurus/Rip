@@ -1,20 +1,23 @@
 use crate::AppSettings;
-use crate::DbProvider;
-use crate::LogLevel;
 use crate::create_data::f64::consts::PI;
+use crate::database::db_provider::DbProvider;
 use crate::database::entities::cell::Cell;
 use crate::database::entities::structure_particle::StructureParticle;
+use crate::enums::log_level::LogLevel;
+use crate::enums::rip_decay_mechanism::RipDecayMechanism;
+use crate::gravity::compute_gravity_fft;
+use crate::helpers::rip::compute_cell_rip_strength;
 use crate::initial_geometry::InitialGeometry;
 use crate::populate_grid::populate_grid;
+use crossterm::event::{self, Event, KeyCode, KeyEvent};
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use indicatif::ProgressBar;
 use rand::Rng;
-// use rand::rngs::StdRng;
-use crate::rip_helpers::RipDecayMechanism;
-use crate::rip_helpers::compute_cell_rip_strength;
 use rayon::prelude::*;
 use std::f64;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 fn initialize_particles(positions: &mut Vec<(f64, f64, f64)>, velocities: &mut Vec<(f64, f64, f64)>) {
     let mut rng = rand::thread_rng();
@@ -52,7 +55,6 @@ fn compute_scale_factor(scale: f64, timestep: usize, settings: &AppSettings, ste
 
 #[inline(always)]
 fn apply_gravity_to_particle(particle: &mut StructureParticle, gravity: (f64, f64, f64), timestep: f64) {
-    // apply gravity to velocity
     particle.velocity_x += gravity.0 * timestep;
     particle.velocity_y += gravity.1 * timestep;
     particle.velocity_z += gravity.2 * timestep;
@@ -63,7 +65,6 @@ fn apply_gravity_to_particle(particle: &mut StructureParticle, gravity: (f64, f6
         }
     }
 
-    // update position
     particle.position_x += particle.velocity_x * timestep;
     particle.position_y += particle.velocity_y * timestep;
     particle.position_z += particle.velocity_z * timestep;
@@ -72,7 +73,7 @@ fn apply_gravity_to_particle(particle: &mut StructureParticle, gravity: (f64, f6
 #[inline(always)]
 pub fn map_particle_to_cell(x: f64, y: f64, z: f64, grid_width: usize, grid_height: usize, grid_depth: usize) -> Option<(usize, usize, usize)> {
     if !(x >= -1.0 && x <= 1.0 && y >= -1.0 && y <= 1.0 && z >= -1.0 && z <= 1.0) {
-        return None; // out of bounds
+        return None;
     }
 
     let col = ((x + 1.0) / 2.0 * grid_width as f64).floor() as usize;
@@ -89,7 +90,6 @@ fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSettings
     let mut rng = rand::thread_rng();
     let mut id_lookup = vec![vec![vec![-1i64; settings.inf_grid_depth]; settings.inf_grid_height]; settings.inf_grid_width];
 
-    // phase 2: assign curvature and neighbors
     for height in 0..settings.inf_grid_height {
         for width in 0..settings.inf_grid_width {
             for depth in 0..settings.inf_grid_depth {
@@ -98,7 +98,7 @@ fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSettings
                 id_lookup[height][width][depth] = current_id;
                 current_id += 1;
                 cell.layer = depth;
-                cell.position = db.get_or_insert_cell_position(height, width);
+                cell.position = db.get_or_insert_cell_position(width, height);
                 cell.curvature = rng.gen_range(0.0..0.1);
 
                 grid[height][width][depth].curvature *= 1.0 + (height as f64);
@@ -115,24 +115,25 @@ fn set_as_black_hole(cell: &mut Cell, next_black_hole_id: &Arc<Mutex<u64>>) {
     *id += 1;
     drop(id);
 
-    // mark as singularity; normal density rules do not apply
-    // cell.matter_density = f64::MAX;
-    // cell.dimple_strength = f64::MAX;
-
-    cell.matter_density = 1.0e30; // big but doesn't break arithmetic
+    cell.matter_density = 1.0e30;
     cell.dimple_strength = 1.0e30;
+}
+
+struct RawModeGuard;
+impl Drop for RawModeGuard {
+    fn drop(&mut self) {
+        let _ = disable_raw_mode();
+    }
 }
 
 pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Box<dyn std::error::Error>> {
     const STEP_DURATION: f64 = 0.01;
-    const MAX_DIMPLE_NON_BH: f64 = 1e4; // adjust based on simulation scale
+    const MAX_DIMPLE_NON_BH: f64 = 1e4;
+    const DIRTY_GRAVITY_THRESHOLD: f64 = 1e-12;
     const MODULE: &str = "create_data->run";
 
-    let seed: u64 = rand::thread_rng().r#gen(); // or `rand::random::<u64>()`
-    let run = db.start_run(seed, Some("baseline")).expect("Failed to start run");
-
-    // Use the same seed for reproducible randomness
-    // let mut geo_rng = StdRng::seed_from_u64(seed);
+    let _raw = RawModeGuard; // disable_raw_mode called automatically when this drops
+    enable_raw_mode()?;
 
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
@@ -142,139 +143,201 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
         r.store(false, Ordering::SeqCst);
     })?;
 
-    let mut grid = vec![vec![vec![Cell::new(); app_settings.inf_grid_depth]; app_settings.inf_grid_width]; app_settings.inf_grid_height];
-
-    seed_initial_curvature(&mut grid, &app_settings, db);
-
-    let num_particles = app_settings.structure_num_particles;
-    let mut positions = vec![(0.0, 0.0, 0.0); num_particles];
-    let mut velocities = vec![(0.0, 0.0, 0.0); num_particles];
-    initialize_particles(&mut positions, &mut velocities);
-
     let geometry = InitialGeometry::from_settings(app_settings);
     let decay_mechanism = RipDecayMechanism::from_settings(app_settings);
 
-    if let Err(err) = populate_grid(&geometry, &mut grid, db) {
-        let message = format!("failed to populate initial geometry: {err}");
-        _ = db.log_message(run.run_id, MODULE, LogLevel::Error, &message);
-        _ = db.fail_run(run.run_id, message);
-        return Err(err.into());
-    }
-
-    let mut particles: Vec<StructureParticle> = positions
-        .iter()
-        .zip(velocities.iter())
-        .map(|(&(x, y, z), &(vx, vy, vz))| StructureParticle {
-            time: 0.0,
-            rip_strength: 0.0,
-            scale_factor: 1.0,
-            position_x: x,
-            position_y: y,
-            position_z: z,
-            velocity_x: vx,
-            velocity_y: vy,
-            velocity_z: vz,
-        })
-        .collect();
-
-    let raw_density = Arc::new(Mutex::new(vec![vec![vec![0.0; app_settings.inf_grid_depth]; app_settings.inf_grid_width]; app_settings.inf_grid_height]));
-
-    let next_black_hole_id: Arc<Mutex<u64>> = Arc::new(Mutex::new(1));
-    let mut scale_factor = 1.0;
-
-    let progress_bar = Arc::new(ProgressBar::new(app_settings.num_timesteps as u64));
-    // let decay_rate = settings.rip_decay_rate;
-    println!("Starting Timesteps...");
-
-    for timestep in 0..app_settings.num_timesteps {
+    for run_index in 0..app_settings.num_runs {
         if !running.load(Ordering::SeqCst) {
-            println!("Stopped at timestep {}", timestep);
+            println!("Stopped before run {}", run_index);
             break;
         }
 
-        progress_bar.inc(1);
-        scale_factor = compute_scale_factor(scale_factor, timestep, &app_settings, STEP_DURATION);
+        let seed: u64 = rand::thread_rng().r#gen();
+        let run = db.start_run(seed, Some("baseline")).expect("Failed to start run");
+        println!("Starting run {} of {} (run_id={})", run_index + 1, app_settings.num_runs, run.run_id);
 
-        grid.par_iter_mut().enumerate().for_each(|(height, col)| {
-            let running = Arc::clone(&running);
-            col.iter_mut().enumerate().for_each(|(width, row)| {
-                row.iter_mut().enumerate().for_each(|(depth, cell)| {
-                    if !running.load(Ordering::SeqCst) {
-                        println!("Stopped at timestep {}", timestep);
-                        return;
-                    }
-                    cell.timestep = timestep;
+        let mut grid = vec![vec![vec![Cell::new(); app_settings.inf_grid_depth]; app_settings.inf_grid_width]; app_settings.inf_grid_height];
 
-                    cell.rip_strength = compute_cell_rip_strength(timestep, cell, &app_settings, &decay_mechanism, STEP_DURATION);
+        seed_initial_curvature(&mut grid, &app_settings, db);
 
-                    cell.scale_factor = scale_factor;
+        let num_particles = app_settings.structure_num_particles;
+        let mut positions = vec![(0.0, 0.0, 0.0); num_particles];
+        let mut velocities = vec![(0.0, 0.0, 0.0); num_particles];
+        initialize_particles(&mut positions, &mut velocities);
 
-                    cell.apply_gravity_interaction();
-
-                    if cell.curvature > app_settings.curvature_threshold && cell.matter_density > app_settings.collapse_density_threshold {
-                        set_as_black_hole(cell, &next_black_hole_id);
-                        cell.is_rip_induced = false;
-                    }
-
-                    // let gravity_magnitude = (cell.gravity_x.powi(2) + cell.gravity_y.powi(2) + cell.gravity_z.powi(2)).sqrt();
-                    if !cell.is_black_hole && cell.rip_strength > app_settings.rip_induced_threshold {
-                        set_as_black_hole(cell, &next_black_hole_id);
-                        cell.is_rip_induced = true;
-                    }
-                    cell.mass = cell.matter_density * cell.volume;
-
-                    let mut raw = raw_density.lock().unwrap();
-                    raw[height][width][depth] = cell.matter_density;
-                    drop(raw); // unlock the mutex manually before continuing
-
-                    cell.compute_gravity_from_density(height, width, depth, &raw_density.lock().unwrap(), app_settings.inf_grid_width, app_settings.inf_grid_height, app_settings.inf_grid_depth);
-                });
-            });
-        });
-
-        for particle in &mut particles {
-            if let Some((col_idx, row_idx, depth_idx)) = map_particle_to_cell(particle.position_x, particle.position_y, particle.position_z, app_settings.inf_grid_height, app_settings.inf_grid_width, app_settings.inf_grid_depth) {
-                if let Some(col) = grid.get_mut(col_idx) {
-                    if let Some(row) = col.get_mut(row_idx) {
-                        if let Some(cell) = row.get_mut(depth_idx) {
-                            let gravity = (cell.gravity_x, cell.gravity_y, cell.gravity_z);
-                            apply_gravity_to_particle(particle, gravity, STEP_DURATION);
-
-                            let gravity_magnitude = (cell.gravity_x.powi(2) + cell.gravity_y.powi(2) + cell.gravity_z.powi(2)).sqrt();
-
-                            if cell.is_black_hole || gravity_magnitude > MAX_DIMPLE_NON_BH {
-                                let already_bh = cell.is_black_hole;
-                                set_as_black_hole(cell, &next_black_hole_id);
-                                if !already_bh {
-                                    cell.is_rip_induced = true;
-                                }
-                            } else {
-                                cell.dimple_strength = gravity_magnitude.min(MAX_DIMPLE_NON_BH);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if let Err(err) = db.insert_particle_batch(&particles) {
-            let message = format!("failed to insert particle batch: {err}");
+        if let Err(err) = populate_grid(&geometry, &mut grid, db) {
+            let message = format!("failed to populate initial geometry: {err}");
             _ = db.log_message(run.run_id, MODULE, LogLevel::Error, &message);
             _ = db.fail_run(run.run_id, message);
             return Err(err.into());
         }
 
-        db.save_all_cells(run.run_id, &mut grid).expect("Error saving cells");
-        db.record_timestep_summary(timestep, 100.0, &grid, run.run_id).expect("failed to record rip field summary");
-    }
-    let count = grid.iter().flat_map(|col| col.iter()).flat_map(|row| row.iter()).filter(|cell| cell.is_black_hole).count();
+        let mut particles: Vec<StructureParticle> = positions
+            .iter()
+            .zip(velocities.iter())
+            .map(|(&(x, y, z), &(vx, vy, vz))| StructureParticle {
+                time: 0.0,
+                rip_strength: 0.0,
+                scale_factor: 1.0,
+                position_x: x,
+                position_y: y,
+                position_z: z,
+                velocity_x: vx,
+                velocity_y: vy,
+                velocity_z: vz,
+            })
+            .collect();
 
-    progress_bar.finish_with_message("Inflation simulation complete.");
-    println!("Black holes created: {}", count);
+        let raw_density = Arc::new(Mutex::new(vec![vec![vec![0.0; app_settings.inf_grid_depth]; app_settings.inf_grid_width]; app_settings.inf_grid_height]));
+        let next_black_hole_id: Arc<Mutex<u64>> = Arc::new(Mutex::new(1));
+        let mut scale_factor = 1.0;
 
-    if let Err(err) = db.complete_run(run.run_id) {
-        let message = format!("failed to complete run: {err}");
-        let _ = db.log_message(run.run_id, MODULE, LogLevel::Error, &message);
+        let progress_bar = Arc::new(ProgressBar::new(app_settings.num_timesteps as u64));
+        println!("Starting Timesteps...");
+
+        for timestep in 0..app_settings.num_timesteps {
+            if !running.load(Ordering::SeqCst) {
+                println!("Stopped at timestep {}", timestep);
+                break;
+            }
+
+            progress_bar.inc(1);
+
+            if event::poll(Duration::from_millis(0)).unwrap_or(false) {
+                if let Ok(event) = event::read() {
+                    match event {
+                        Event::Key(KeyEvent { code: KeyCode::Pause, .. }) => {
+                            println!("\nPaused at timestep {}. Continue or Quit? (c/q)", timestep);
+                            loop {
+                                let mut input = String::new();
+                                std::io::stdin().read_line(&mut input).unwrap();
+                                match input.trim().to_lowercase().as_str() {
+                                    "c" => break,
+                                    "q" => {
+                                        println!("Quitting at timestep {}", timestep);
+                                        _ = db.fail_run(run.run_id, "User quit".to_string());
+                                        running.store(false, Ordering::SeqCst);
+                                        break;
+                                    }
+                                    _ => println!("Please enter c to continue or q to quit:"),
+                                }
+                            }
+                        }
+                        Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {} // silently continue
+                        _ => {}
+                    }
+                }
+            }
+
+            // Break out of timestep loop if user quit
+            if !running.load(Ordering::SeqCst) {
+                break;
+            }
+
+            scale_factor = compute_scale_factor(scale_factor, timestep, &app_settings, STEP_DURATION);
+
+            grid.par_iter_mut().enumerate().for_each(|(height, col)| {
+                let running = Arc::clone(&running);
+                col.iter_mut().enumerate().for_each(|(width, row)| {
+                    row.iter_mut().enumerate().for_each(|(depth, cell)| {
+                        if !running.load(Ordering::SeqCst) {
+                            return;
+                        }
+
+                        cell.timestep = timestep;
+                        cell.scale_factor = scale_factor;
+                        cell.rip_strength = compute_cell_rip_strength(timestep, cell, &app_settings, &decay_mechanism, STEP_DURATION);
+
+                        cell.apply_gravity_interaction(app_settings.gravity_density_coupling, app_settings.gravity_curvature_coupling);
+
+                        // Black hole formation — set_as_black_hole marks dirty internally
+                        if !cell.is_black_hole {
+                            if cell.curvature > app_settings.curvature_threshold && cell.matter_density > app_settings.collapse_density_threshold {
+                                set_as_black_hole(cell, &next_black_hole_id);
+                                cell.is_rip_induced = false;
+                            } else if cell.rip_strength > app_settings.rip_induced_threshold {
+                                set_as_black_hole(cell, &next_black_hole_id);
+                                cell.is_rip_induced = true;
+                            }
+                        }
+
+                        cell.mass = cell.matter_density * cell.volume;
+
+                        let mut raw = raw_density.lock().unwrap();
+                        raw[height][width][depth] = cell.matter_density;
+                        drop(raw);
+                    });
+                });
+            });
+
+            // Compute gravity for all cells at once via FFT
+            let density_snapshot = {
+                let raw = raw_density.lock().unwrap();
+                raw.clone()
+            };
+
+            let (gx, gy, gz) = compute_gravity_fft(&density_snapshot, app_settings.gravity, app_settings.inf_grid_height, app_settings.inf_grid_width, app_settings.inf_grid_depth);
+
+            // Write gravity back — only mark dirty if vectors changed meaningfully
+            grid.par_iter_mut().enumerate().for_each(|(h, col)| {
+                col.iter_mut().enumerate().for_each(|(w, row)| {
+                    row.iter_mut().enumerate().for_each(|(d, cell)| {
+                        cell.gravity_x = gx[h][w][d];
+                        cell.gravity_y = gy[h][w][d];
+                        cell.gravity_z = gz[h][w][d];
+                    });
+                });
+            });
+
+            // Apply gravity to particles and update dimple strength
+            for particle in &mut particles {
+                if let Some((col_idx, row_idx, depth_idx)) = map_particle_to_cell(particle.position_x, particle.position_y, particle.position_z, app_settings.inf_grid_height, app_settings.inf_grid_width, app_settings.inf_grid_depth) {
+                    if let Some(col) = grid.get_mut(col_idx) {
+                        if let Some(row) = col.get_mut(row_idx) {
+                            if let Some(cell) = row.get_mut(depth_idx) {
+                                let gravity = (cell.gravity_x, cell.gravity_y, cell.gravity_z);
+                                apply_gravity_to_particle(particle, gravity, STEP_DURATION);
+
+                                let gravity_magnitude = (cell.gravity_x.powi(2) + cell.gravity_y.powi(2) + cell.gravity_z.powi(2)).sqrt();
+
+                                if cell.is_black_hole || gravity_magnitude > MAX_DIMPLE_NON_BH {
+                                    let already_bh = cell.is_black_hole;
+                                    set_as_black_hole(cell, &next_black_hole_id);
+                                    if !already_bh {
+                                        cell.is_rip_induced = true;
+                                    }
+                                } else {
+                                    let new_dimple = gravity_magnitude.min(MAX_DIMPLE_NON_BH);
+                                    if (new_dimple - cell.dimple_strength).abs() > DIRTY_GRAVITY_THRESHOLD {
+                                        cell.dimple_strength = new_dimple;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Err(err) = db.insert_particle_batch(&particles) {
+                let message = format!("failed to insert particle batch: {err}");
+                _ = db.log_message(run.run_id, MODULE, LogLevel::Error, &message);
+                _ = db.fail_run(run.run_id, message);
+                return Err(err.into());
+            }
+
+            db.save_all_cells(run.run_id, &mut grid).expect("Error saving cells");
+            db.record_timestep_summary(timestep, 100.0, &grid, run.run_id).expect("failed to record rip field summary");
+        }
+
+        let count = grid.iter().flat_map(|col| col.iter()).flat_map(|row| row.iter()).filter(|cell| cell.is_black_hole).count();
+
+        progress_bar.finish_with_message("Inflation simulation complete.");
+        println!("Run {} complete. Black holes created: {}", run_index + 1, count);
+
+        if let Err(err) = db.complete_run(run.run_id) {
+            let message = format!("failed to complete run: {err}");
+            let _ = db.log_message(run.run_id, MODULE, LogLevel::Error, &message);
+        }
     }
 
     return Ok(());

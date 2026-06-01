@@ -20,3 +20,7 @@ assets/history/
 **/post.csv.gz
 **/*.mp4
 **/rip_data.* 
+**/*.db-journal
+**/*.db-wal
+**/*.db-shm
+output/

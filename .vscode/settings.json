@@ -3,15 +3,33 @@
 		"*.sql": "sqlite"
 	},
 	"cSpell.words": [
+		"cmap",
+		"colorbar",
+		"crossterm",
 		"dtype",
+		"figsize",
 		"flate",
+		"fontsize",
+		"framealpha",
+		"imshow",
 		"indicatif",
 		"ltrim",
+		"mcolors",
+		"nanmax",
+		"nanmin",
+		"optipng",
 		"Perlin",
 		"rngs",
 		"rtrim",
 		"rusqlite",
+		"rustfft",
 		"serde",
-		"smbh"
+		"smbh",
+		"suptitle",
+		"viridis",
+		"vmax",
+		"vmin",
+		"xlabel",
+		"ylabel"
 	]
 }
