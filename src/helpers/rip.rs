@@ -50,6 +50,8 @@ impl RipDecayMechanism {
 
             "inverse_strength" | "inverse" => Self::InverseStrength { rate: settings.decay_inverse_rate },
 
+            "diffusive" | "diffuse" => panic!("RIP_DECAY_MECHANISM 'diffusive' is not yet implemented. | Please choose: none, time_only, self_healing, matter_coupled, inverse_strength"),
+
             other => panic!("Unknown RIP_DECAY_MECHANISM: '{}'. Expected: none, time_only, self_healing, matter_coupled, inverse_strength", other),
         }
     }

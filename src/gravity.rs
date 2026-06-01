@@ -23,10 +23,10 @@ pub fn compute_gravity_fft(density: &Vec<Vec<Vec<f64>>>, gravity_constant: f64, 
             for id in 0..grid_depth {
                 let idx = ih * grid_width * grid_depth + iw * grid_depth + id;
 
-                // Wavenumbers (shifted for negative frequencies)
-                let kh = wavenumber(ih, grid_height);
-                let kw = wavenumber(iw, grid_width);
-                let kd = wavenumber(id, grid_depth);
+                // Wave numbers (shifted for negative frequencies)
+                let kh = get_wave_number(ih, grid_height);
+                let kw = get_wave_number(iw, grid_width);
+                let kd = get_wave_number(id, grid_depth);
                 let k2 = kh * kh + kw * kw + kd * kd;
 
                 if k2 == 0.0 {
@@ -71,9 +71,9 @@ pub fn compute_gravity_fft(density: &Vec<Vec<Vec<f64>>>, gravity_constant: f64, 
     (gx, gy, gz)
 }
 
-/// Wavenumber for index i in a grid of size n (handles negative frequencies)
+/// Wave number for index i in a grid of size n (handles negative frequencies)
 #[inline(always)]
-fn wavenumber(i: usize, n: usize) -> f64 {
+fn get_wave_number(i: usize, n: usize) -> f64 {
     let i = i as f64;
     let n = n as f64;
     if i <= n / 2.0 { i } else { i - n }
@@ -102,8 +102,6 @@ fn fft_axis(buf: &mut Vec<Complex<f64>>, nh: usize, nw: usize, nd: usize, axis: 
         _ => unreachable!(),
     };
     let fft = if inverse { planner.plan_fft_inverse(n_axis) } else { planner.plan_fft_forward(n_axis) };
-
-    // let scratch = vec![Complex::new(0.0, 0.0); fft.get_outofplace_scratch_len()];
 
     // Extract each line along this axis, FFT it, write back
     match axis {

@@ -1,4 +1,4 @@
-use crate::DbProvider;
+use crate::database::db_provider::DbProvider;
 use crate::database::entities::cell::Cell;
 use crate::initial_geometry::InitialGeometry;
 use rand::Rng;
@@ -25,12 +25,7 @@ pub fn populate_grid(
             }
         }
 
-        InitialGeometry::GaussianBlobs {
-            count,
-            peak_density,
-            sigma_min,
-            sigma_max,
-        } => {
+        InitialGeometry::GaussianBlobs { count, peak_density, sigma_min, sigma_max } => {
             // Pick N random centers + sigmas, then add gaussian contributions per cell
             let blobs: Vec<(f64, f64, f64, f64)> = (0..*count)
                 .map(|_| {
@@ -59,12 +54,7 @@ pub fn populate_grid(
             }
         }
 
-        InitialGeometry::Perlin {
-            octaves,
-            frequency,
-            amplitude,
-            seed,
-        } => {
+        InitialGeometry::Perlin { octaves, frequency, amplitude, seed } => {
             use noise::{NoiseFn, Perlin};
             let perlin = Perlin::new(*seed);
 
@@ -75,9 +65,7 @@ pub fn populate_grid(
                         let mut freq = *frequency;
                         let mut amp = *amplitude;
                         for _ in 0..*octaves {
-                            value +=
-                                perlin.get([x as f64 * freq, y as f64 * freq, z as f64 * freq])
-                                    * amp;
+                            value += perlin.get([x as f64 * freq, y as f64 * freq, z as f64 * freq]) * amp;
                             freq *= 2.0;
                             amp *= 0.5;
                         }

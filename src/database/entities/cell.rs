@@ -43,6 +43,8 @@ pub struct Cell {
     pub is_rip_induced: bool,
     /// Physical volume of the cell in simulated space
     pub volume: f64,
+    /// Indicates if the cell has been modified since last save
+    pub is_dirty: bool,
 }
 
 impl Cell {
@@ -68,6 +70,7 @@ impl Cell {
             smbh_rip_contribution: false,
             volume: 1.0,
             is_rip_induced: false,
+            is_dirty: true,
         }
     }
 

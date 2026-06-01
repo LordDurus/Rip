@@ -8,7 +8,6 @@ pub enum AppValue {
     Int(i64),
     Bool(bool),
     Text(String),
-    String(String),
 }
 
 #[allow(dead_code)]
@@ -150,7 +149,7 @@ impl AppSettings {
                     "false" | "0" | "no" | "n" => Ok(AppValue::Bool(false)),
                     _ => Err(rusqlite::Error::InvalidQuery), // Or construct custom error
                 },
-                "string" => Ok(AppValue::Text(val)),
+                "text" => Ok(AppValue::Text(val)),
                 _other => Err(rusqlite::Error::InvalidColumnType(0, dtype.clone(), rusqlite::types::Type::Text)),
             }?;
 
@@ -200,7 +199,6 @@ impl AppSettings {
         let get_string = |key: &str| -> String {
             match map.get(&key.to_uppercase()) {
                 Some(AppValue::Text(v)) => v.clone(),
-                Some(AppValue::String(v)) => v.clone(),
                 _ => panic!("Missing or invalid string setting for key: {}", key),
             }
         };
@@ -208,11 +206,6 @@ impl AppSettings {
         let get_bool = |key: &str| -> bool {
             match map.get(&key.to_uppercase()) {
                 Some(AppValue::Bool(v)) => *v,
-                Some(AppValue::String(v)) => match v.trim().to_lowercase().as_str() {
-                    "true" | "1" | "y" => true,
-                    "false" | "0" | "n" => false,
-                    _ => panic!("Invalid string value for bool key: {}", key),
-                },
                 Some(AppValue::Int(v)) => *v != 0,
                 Some(AppValue::Float(v)) => *v != 0.0,
                 _ => panic!("Missing or invalid bool setting for key: {}", key),
