@@ -3,7 +3,7 @@ use crate::database::entities::cell::Cell;
 use crate::database::entities::cell_position::CellPosition;
 use crate::database::entities::run::Run;
 use crate::database::entities::structure_particle::StructureParticle;
-use crate::enums::LogLevel;
+use crate::enums::log_level::LogLevel;
 use rusqlite::{Connection, Result, params};
 
 pub struct SqliteProvider {
@@ -99,9 +99,6 @@ impl DbProvider for SqliteProvider {
         for col in grid.iter() {
             for row in col.iter() {
                 for cell in row.iter() {
-                    if !cell.is_dirty {
-                        continue;
-                    }
                     buffer.push(cell);
                     if buffer.len() >= 1000 {
                         Self::insert_batch(&tx, run_id, &buffer)?;
@@ -115,14 +112,6 @@ impl DbProvider for SqliteProvider {
         }
 
         tx.commit()?;
-        for col in grid.iter_mut() {
-            for row in col.iter_mut() {
-                for cell in row.iter_mut() {
-                    cell.is_dirty = false;
-                }
-            }
-        }
-
         Ok(())
     }
 

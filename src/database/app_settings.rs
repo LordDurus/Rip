@@ -112,14 +112,26 @@ pub struct AppSettings {
     /// Setting w = -1 models dark energy with constant density causing accelerated expansion.
     pub dark_energy: f64,
     */
+    /// self_healing, matter_coupled, inverse_strength.
     pub rip_decay_mechanism: String,
+    /// TimeOnly mechanism: fraction of rip strength lost per unit time.
     pub decay_time_rate: f64,
+    /// SelfHealing mechanism: base healing rate when spacetime is undisturbed.
     pub decay_healing_base: f64,
+    /// SelfHealing mechanism: how strongly local curvature and density slow healing.
     pub decay_healing_damping: f64,
+    /// MatterCoupled mechanism: decay rate applied while matter density is below threshold.
     pub decay_matter_rate: f64,
+    /// MatterCoupled mechanism: density above which the rip stops decaying (matter feeds it).
     pub decay_matter_threshold: f64,
+    /// InverseStrength mechanism: scaling factor; stronger rips decay more slowly.
     pub decay_inverse_rate: f64,
+    /// Rip strength above which a cell collapses into a rip-induced black hole.
     pub rip_induced_threshold: f64,
+    /// Coefficient controlling how much curvature feeds into matter density growth per step.
+    pub gravity_density_coupling: f64,
+    /// Coefficient controlling how much matter density feeds into curvature growth per step.
+    pub gravity_curvature_coupling: f64,
 }
 
 impl AppSettings {
@@ -271,6 +283,8 @@ impl AppSettings {
             decay_matter_rate: get_f64("DECAY_MATTER_RATE"),
             decay_matter_threshold: get_f64("DECAY_MATTER_THRESHOLD"),
             decay_inverse_rate: get_f64("DECAY_INVERSE_RATE"),
+            gravity_density_coupling: get_f64("GRAVITY_DENSITY_COUPLING"),
+            gravity_curvature_coupling: get_f64("GRAVITY_CURVATURE_COUPLING"),
         }
     }
 

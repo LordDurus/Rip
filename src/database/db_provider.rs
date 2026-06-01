@@ -2,7 +2,7 @@ use crate::database::entities::cell::Cell;
 use crate::database::entities::cell_position::CellPosition;
 use crate::database::entities::run::Run;
 use crate::database::entities::structure_particle::StructureParticle;
-use crate::enums::LogLevel;
+use crate::enums::log_level::LogLevel;
 use rusqlite::Result;
 
 pub trait DbProvider {

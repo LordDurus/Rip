@@ -43,8 +43,6 @@ pub struct Cell {
     pub is_rip_induced: bool,
     /// Physical volume of the cell in simulated space
     pub volume: f64,
-    /// Indicates if the cell has been modified since last save
-    pub is_dirty: bool,
 }
 
 impl Cell {
@@ -70,17 +68,16 @@ impl Cell {
             smbh_rip_contribution: false,
             volume: 1.0,
             is_rip_induced: false,
-            is_dirty: true,
         }
     }
 
     #[inline(always)]
-    pub fn apply_gravity_interaction(&mut self) {
+    pub fn apply_gravity_interaction(&mut self, density_coupling: f64, curvature_coupling: f64) {
         if self.is_black_hole {
             return;
         }
-        self.matter_density += 0.05 * self.curvature;
-        self.curvature += 0.005 * self.matter_density;
+        self.matter_density += density_coupling * self.curvature;
+        self.curvature += curvature_coupling * self.matter_density;
         self.matter_density = self.matter_density.max(0.0);
         self.curvature = self.curvature.max(0.0);
     }

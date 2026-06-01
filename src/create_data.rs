@@ -3,9 +3,9 @@ use crate::create_data::f64::consts::PI;
 use crate::database::db_provider::DbProvider;
 use crate::database::entities::cell::Cell;
 use crate::database::entities::structure_particle::StructureParticle;
-use crate::enums::LogLevel;
+use crate::enums::log_level::LogLevel;
+use crate::enums::rip_decay_mechanism::RipDecayMechanism;
 use crate::gravity::compute_gravity_fft;
-use crate::helpers::rip::RipDecayMechanism;
 use crate::helpers::rip::compute_cell_rip_strength;
 use crate::initial_geometry::InitialGeometry;
 use crate::populate_grid::populate_grid;
@@ -100,7 +100,6 @@ fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSettings
                 cell.layer = depth;
                 cell.position = db.get_or_insert_cell_position(width, height);
                 cell.curvature = rng.gen_range(0.0..0.1);
-                cell.is_dirty = true;
 
                 grid[height][width][depth].curvature *= 1.0 + (height as f64);
             }
@@ -111,7 +110,6 @@ fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSettings
 
 fn set_as_black_hole(cell: &mut Cell, next_black_hole_id: &Arc<Mutex<u64>>) {
     cell.is_black_hole = true;
-    cell.is_dirty = true;
     let mut id = next_black_hole_id.lock().unwrap();
     cell.black_hole_id = Some(*id);
     *id += 1;
@@ -131,8 +129,6 @@ impl Drop for RawModeGuard {
 pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Box<dyn std::error::Error>> {
     const STEP_DURATION: f64 = 0.01;
     const MAX_DIMPLE_NON_BH: f64 = 1e4;
-    const DIRTY_DENSITY_THRESHOLD: f64 = 1e-9;
-    const DIRTY_CURVATURE_THRESHOLD: f64 = 1e-9;
     const DIRTY_GRAVITY_THRESHOLD: f64 = 1e-12;
     const MODULE: &str = "create_data->run";
 
@@ -250,20 +246,9 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
 
                         cell.timestep = timestep;
                         cell.scale_factor = scale_factor;
-
-                        let old_rip = cell.rip_strength;
                         cell.rip_strength = compute_cell_rip_strength(timestep, cell, &app_settings, &decay_mechanism, STEP_DURATION);
-                        if (cell.rip_strength - old_rip).abs() > DIRTY_DENSITY_THRESHOLD {
-                            cell.is_dirty = true;
-                        }
 
-                        // Track changes from gravity interaction
-                        let old_density = cell.matter_density;
-                        let old_curvature = cell.curvature;
-                        cell.apply_gravity_interaction();
-                        if (cell.matter_density - old_density).abs() > DIRTY_DENSITY_THRESHOLD || (cell.curvature - old_curvature).abs() > DIRTY_CURVATURE_THRESHOLD {
-                            cell.is_dirty = true;
-                        }
+                        cell.apply_gravity_interaction(app_settings.gravity_density_coupling, app_settings.gravity_curvature_coupling);
 
                         // Black hole formation — set_as_black_hole marks dirty internally
                         if !cell.is_black_hole {
@@ -297,15 +282,9 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
             grid.par_iter_mut().enumerate().for_each(|(h, col)| {
                 col.iter_mut().enumerate().for_each(|(w, row)| {
                     row.iter_mut().enumerate().for_each(|(d, cell)| {
-                        let old_gx = cell.gravity_x;
-                        let old_gy = cell.gravity_y;
-                        let old_gz = cell.gravity_z;
                         cell.gravity_x = gx[h][w][d];
                         cell.gravity_y = gy[h][w][d];
                         cell.gravity_z = gz[h][w][d];
-                        if (cell.gravity_x - old_gx).abs() > DIRTY_GRAVITY_THRESHOLD || (cell.gravity_y - old_gy).abs() > DIRTY_GRAVITY_THRESHOLD || (cell.gravity_z - old_gz).abs() > DIRTY_GRAVITY_THRESHOLD {
-                            cell.is_dirty = true;
-                        }
                     });
                 });
             });
@@ -331,7 +310,6 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                                     let new_dimple = gravity_magnitude.min(MAX_DIMPLE_NON_BH);
                                     if (new_dimple - cell.dimple_strength).abs() > DIRTY_GRAVITY_THRESHOLD {
                                         cell.dimple_strength = new_dimple;
-                                        cell.is_dirty = true;
                                     }
                                 }
                             }
