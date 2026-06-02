@@ -9,6 +9,7 @@ use crate::gravity::compute_gravity_fft;
 use crate::helpers::rip::compute_cell_rip_strength;
 use crate::initial_geometry::InitialGeometry;
 use crate::populate_grid::populate_grid;
+use colored::Colorize;
 use crossterm::event::{self, Event, KeyCode, KeyEvent};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use indicatif::ProgressBar;
@@ -43,14 +44,16 @@ fn initialize_particles(positions: &mut Vec<(f64, f64, f64)>, velocities: &mut V
 fn compute_scale_factor(scale: f64, timestep: usize, settings: &AppSettings, step_duration: f64) -> f64 {
     let ramp = 1.0 - f64::exp(-settings.rip_decay_rate * timestep as f64);
     let decay = f64::exp(-settings.rip_evaporation_rate * timestep as f64);
-    let healing = 1.0; // placeholder if I later want global curvature/density influence
-    let global_rip_strength = settings.rip_initial * ramp * decay * healing;
+    let healing = 1.0; // placeholder for future healing mechanism
+    let rip_strength = settings.rip_initial * ramp * decay * healing;
 
-    let expansion_factor = global_rip_strength.sqrt() * step_duration;
-    if expansion_factor > 0.05 {
-        return scale * f64::exp(expansion_factor);
-    }
-    return scale;
+    let expansion_factor = rip_strength.sqrt() * step_duration;
+    // if expansion_factor > 0.05 {
+    // Expansion tapers smoothly: as global_rip_strength decays, expansion_factor → 0
+    // and the multiplier exp(expansion_factor) → 1 (no growth). No hard cutoff.
+    return scale * f64::exp(expansion_factor);
+    // }
+    //return scale;
 }
 
 #[inline(always)]
@@ -86,22 +89,16 @@ pub fn map_particle_to_cell(x: f64, y: f64, z: f64, grid_width: usize, grid_heig
 fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSettings, db: &mut dyn DbProvider) {
     let progress_bar: ProgressBar = ProgressBar::new((settings.inf_grid_height * settings.inf_grid_width * settings.inf_grid_depth) as u64);
 
-    let mut current_id: i64 = 1;
     let mut rng = rand::thread_rng();
-    let mut id_lookup = vec![vec![vec![-1i64; settings.inf_grid_depth]; settings.inf_grid_height]; settings.inf_grid_width];
 
     for height in 0..settings.inf_grid_height {
         for width in 0..settings.inf_grid_width {
             for depth in 0..settings.inf_grid_depth {
                 let cell = &mut grid[height][width][depth];
                 progress_bar.inc(1);
-                id_lookup[height][width][depth] = current_id;
-                current_id += 1;
                 cell.layer = depth;
                 cell.position = db.get_or_insert_cell_position(width, height);
                 cell.curvature = rng.gen_range(0.0..0.1);
-
-                grid[height][width][depth].curvature *= 1.0 + (height as f64);
             }
         }
     }
@@ -154,7 +151,7 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
 
         let seed: u64 = rand::thread_rng().r#gen();
         let run = db.start_run(seed, Some("baseline")).expect("Failed to start run");
-        println!("Starting run {} of {} (run_id={})", run_index + 1, app_settings.num_runs, run.run_id);
+        println!("{} {}{}{} {}{}{}", "Starting run".white(), (run_index + 1), " of ".white(), app_settings.num_runs, "(run_id=".white(), run.run_id, ")".white());
 
         let mut grid = vec![vec![vec![Cell::new(); app_settings.inf_grid_depth]; app_settings.inf_grid_width]; app_settings.inf_grid_height];
 
@@ -248,7 +245,7 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                         cell.scale_factor = scale_factor;
                         cell.rip_strength = compute_cell_rip_strength(timestep, cell, &app_settings, &decay_mechanism, STEP_DURATION);
 
-                        cell.apply_gravity_interaction(app_settings.gravity_density_coupling, app_settings.gravity_curvature_coupling);
+                        // cell.apply_gravity_interaction(app_settings.gravity_density_coupling, app_settings.gravity_curvature_coupling);
 
                         // Black hole formation — set_as_black_hole marks dirty internally
                         if !cell.is_black_hole {
@@ -285,6 +282,22 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                         cell.gravity_x = gx[h][w][d];
                         cell.gravity_y = gy[h][w][d];
                         cell.gravity_z = gz[h][w][d];
+                    });
+                });
+            });
+
+            // NEW: Accretion — gravity pulls matter into denser regions
+            //let accretion_rate = 0.001; // tunable, add to AppSettings later
+            let accretion_rate = 1e-6; // tunable, add to AppSettings later
+            grid.par_iter_mut().for_each(|col| {
+                col.iter_mut().for_each(|row| {
+                    row.iter_mut().for_each(|cell| {
+                        if !cell.is_black_hole {
+                            let gravity_magnitude = (cell.gravity_x.powi(2) + cell.gravity_y.powi(2) + cell.gravity_z.powi(2)).sqrt();
+                            // cell.matter_density = (cell.matter_density + accretion_rate * gravity_magnitude * cell.matter_density).max(0.0);
+                            let delta = (accretion_rate * gravity_magnitude * cell.matter_density).min(cell.matter_density * 0.01); // max 1% growth per step
+                            cell.matter_density = (cell.matter_density + delta).max(0.0);
+                        }
                     });
                 });
             });

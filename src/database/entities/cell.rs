@@ -70,15 +70,4 @@ impl Cell {
             is_rip_induced: false,
         }
     }
-
-    #[inline(always)]
-    pub fn apply_gravity_interaction(&mut self, density_coupling: f64, curvature_coupling: f64) {
-        if self.is_black_hole {
-            return;
-        }
-        self.matter_density += density_coupling * self.curvature;
-        self.curvature += curvature_coupling * self.matter_density;
-        self.matter_density = self.matter_density.max(0.0);
-        self.curvature = self.curvature.max(0.0);
-    }
 }

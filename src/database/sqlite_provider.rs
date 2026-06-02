@@ -118,27 +118,45 @@ impl DbProvider for SqliteProvider {
     fn record_timestep_summary(&mut self, timestep: usize, step_duration_myr: f64, grid: &Vec<Vec<Vec<Cell>>>, run_id: i64) -> Result<()> {
         let mut total_rip_strength = 0.0;
         let mut total_scale_factor = 0.0;
+        let mut black_hole_count: i64 = 0;
+        let mut total_matter = 0.0;
         let mut cell_count = 0;
+        let mut total_gravity_magnitude = 0.0;
 
         for col in grid {
             for row in col {
                 for cell in row {
                     total_rip_strength += cell.rip_strength;
                     total_scale_factor += cell.scale_factor;
+
+                    total_rip_strength += cell.rip_strength;
+                    total_scale_factor += cell.scale_factor;
+
+                    let gm = (cell.gravity_x.powi(2) + cell.gravity_y.powi(2) + cell.gravity_z.powi(2)).sqrt();
+                    total_gravity_magnitude += gm; // NEW
+
+                    // Black holes have matter_density = 1e30 sentinel — exclude them,
+                    // since that matter has "left" normal spacetime (fallen into the rip)
+                    if cell.is_black_hole {
+                        black_hole_count += 1;
+                    } else {
+                        total_matter += cell.matter_density;
+                    }
+
                     cell_count += 1;
                 }
             }
         }
-
+        let avg_gravity_magnitude = total_gravity_magnitude / cell_count as f64;
         let avg_rip_strength = finite_or_zero(total_rip_strength / cell_count.max(1) as f64);
         let avg_scale_factor = finite_or_zero(total_scale_factor / cell_count.max(1) as f64);
 
         let time_myr = timestep as f64 * step_duration_myr;
 
         self.conn.execute(
-            "insert into timestep_summary (timestep, time_myr, rip_strength_avg, scale_factor_avg, run_id)
-				 values (?1, ?2, ?3, ?4, ?5)",
-            params![timestep as i64, time_myr, avg_rip_strength, avg_scale_factor, run_id],
+            "insert into timestep_summary (timestep, time_myr, rip_strength_avg, scale_factor_avg, run_id, total_matter, black_hole_count, gravity_magnitude_avg)
+				 values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![timestep as i64, time_myr, avg_rip_strength, avg_scale_factor, run_id, total_matter, black_hole_count, avg_gravity_magnitude],
         )?;
 
         Ok(())
