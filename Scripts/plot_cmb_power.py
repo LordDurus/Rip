@@ -55,7 +55,7 @@ def load_field_grid(conn, run_id, timestep, field):
     """Load a single field as a 2D grid, averaged along the depth/layer axis."""
     df = pd.read_sql_query(
         f"""
-        SELECT cp.col, cp.row, c.{field}
+        SELECT cp.col, cp.row, c.{field}, c.is_black_hole
         FROM cell c
         JOIN cell_position cp ON c.cell_position_id = cp.cell_position_id
         WHERE c.run_id = ? AND c.timestep = ?
@@ -64,6 +64,9 @@ def load_field_grid(conn, run_id, timestep, field):
     )
     if df.empty:
         return None
+
+    # Exclude black hole cells — their sentinel value (1e30) drowns out real density signal
+    df = df[df["is_black_hole"] == 0]
 
     pivot = df.groupby(["row", "col"])[field].mean().reset_index()
     rows = sorted(pivot["row"].unique())
@@ -74,7 +77,8 @@ def load_field_grid(conn, run_id, timestep, field):
     for _, e in pivot.iterrows():
         grid[row_idx[e["row"]], col_idx[e["col"]]] = e[field]
 
-    # Replace any NaNs (collapsed/black-hole sentinels often huge) with the mean
+    # NaNs here now mean the col/row had ONLY black hole cells at all depths
+    # Fill with the non-BH mean so the FFT doesn't break
     if np.isnan(grid).any():
         grid[np.isnan(grid)] = np.nanmean(grid)
     return grid

@@ -286,17 +286,15 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                 });
             });
 
-            // NEW: Accretion — gravity pulls matter into denser regions
-            //let accretion_rate = 0.001; // tunable, add to AppSettings later
-            let accretion_rate = 1e-6; // tunable, add to AppSettings later
+            // Accretion and rip drain — compete to grow or reduce matter density
             grid.par_iter_mut().for_each(|col| {
                 col.iter_mut().for_each(|row| {
                     row.iter_mut().for_each(|cell| {
                         if !cell.is_black_hole {
                             let gravity_magnitude = (cell.gravity_x.powi(2) + cell.gravity_y.powi(2) + cell.gravity_z.powi(2)).sqrt();
-                            // cell.matter_density = (cell.matter_density + accretion_rate * gravity_magnitude * cell.matter_density).max(0.0);
-                            let delta = (accretion_rate * gravity_magnitude * cell.matter_density).min(cell.matter_density * 0.01); // max 1% growth per step
-                            cell.matter_density = (cell.matter_density + delta).max(0.0);
+                            let accretion = (app_settings.accretion_rate * gravity_magnitude * cell.matter_density).min(cell.matter_density * 0.01);
+                            let drain = app_settings.rip_drain_rate * cell.rip_strength * cell.matter_density;
+                            cell.matter_density = (cell.matter_density + accretion - drain).max(0.0);
                         }
                     });
                 });
