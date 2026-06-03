@@ -1,4 +1,5 @@
 use rusqlite::{Connection, Result};
+use serde::Serialize;
 use std::collections::HashMap;
 
 #[allow(dead_code)]
@@ -11,7 +12,7 @@ pub enum AppValue {
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 /// Holds configuration settings for the cosmological simulation.
 pub struct AppSettings {
     /*
@@ -61,6 +62,7 @@ pub struct AppSettings {
     /// Number of structure particles used in the simulation.
     pub structure_num_particles: usize,
     /// Suppress logging/output if true.
+    #[serde(skip)]
     pub quiet: bool,
     /// Weight of curvature's influence on local rip location amplification.
     pub rip_curvature_weight: f64,
@@ -132,6 +134,10 @@ pub struct AppSettings {
     pub gravity_density_coupling: f64,
     /// Coefficient controlling how much matter density feeds into curvature growth per step.
     pub gravity_curvature_coupling: f64,
+    /// Rate at which gravity pulls matter into denser regions each timestep.
+    pub accretion_rate: f64,
+    /// Rate at which the rip field drains matter out of normal spacetime each timestep.
+    pub rip_drain_rate: f64,
 }
 
 impl AppSettings {
@@ -245,6 +251,8 @@ impl AppSettings {
             num_cores: get_u32("NUM_CORES"),
             // dark_energy: -1.0,
             rip_induced_threshold: get_f64("RIP_INDUCED_THRESHOLD"),
+            accretion_rate: get_f64("ACCRETION_RATE"),
+            rip_drain_rate: get_f64("RIP_DRAIN_RATE"),
             gravity: get_f64("GRAVITY"),
             light_speed: get_f64("LIGHT_SPEED"),
             decay_factor: get_f64("DECAY_FACTOR"),

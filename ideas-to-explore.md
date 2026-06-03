@@ -87,3 +87,34 @@ It also ties together three threads already in play: the universe-inside-a-black
 - Existing tuning (curvature_threshold, density thresholds, weights) will likely need recalibration after the switch.
 
 ---
+
+## Cyclic universe with leaky boundaries
+
+**Hypothesis:** The universe undergoes damped cycles driven by the rip field and black hole formation/healing. Each cycle is smaller than the last due to matter lost beyond gravitational reach during expansion.
+
+**The cycle:**
+1. Rip field drives inflation, black holes form, matter drains into rips
+2. Rip field weakens, black holes slowly heal (self-healing decay mechanism), matter returns
+3. Gravity dominates, returned matter recollapses, new black holes form
+4. Repeat — but each cycle starts with less total matter than the last
+
+**The leak:** Inertia is treated as intrinsic to matter (not emergent from Mach's principle). Matter carried beyond gravitational reach during inflation coasts forever and never returns. Each cycle is irreversible at the boundary.
+
+**End state:** Eventually insufficient matter remains to trigger black hole formation, the rip field is never fed, expansion never restarts. Heat death reached cyclically rather than in one shot.
+
+**Dependencies:** Requires black hole healing (return path for matter) to be implemented before this can be tested. See `RipDecayMechanism::SelfHealing`.
+
+# Machian inertia
+
+**Hypothesis:** Inertia is emergent from the gravitational relationship with all 
+other matter in the universe rather than intrinsic to matter. As the universe 
+expands and matter disperses, effective inertia weakens — distant matter slows 
+naturally rather than coasting forever.
+
+**Why it matters:** Would close the "leaky boundary" problem in the cyclic universe 
+model — matter carried far by inflation would eventually return rather than being 
+permanently lost.
+
+**Why it's deferred:** Requires computing each particle's inertia as a function of 
+the full matter distribution every timestep. High implementation cost, likely 
+negligible observable difference at current simulation scales.
