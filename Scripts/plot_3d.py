@@ -114,13 +114,13 @@ def main():
         y=normal_filtered["row"],
         z=normal_filtered["layer"],
         mode="markers",
-        marker=dict(
-            size=2,
-            color=normal_filtered["matter_density"],
-            colorscale="Plasma",
-            colorbar=dict(title="Matter Density", x=1.0),
-            opacity=0.6,
-        ),
+        marker={
+            "size": 2,
+            "color": normal_filtered["matter_density"],
+            "colorscale": "Plasma",
+            "colorbar": {"title": "Matter Density", "x": 1.0},
+            "opacity": 0.6,
+        },
         name="High-density matter",
         hovertemplate="col=%{x}, row=%{y}, layer=%{z}<br>density=%{marker.color:.4f}<extra></extra>",
     ))
@@ -134,11 +134,11 @@ def main():
             y=bh_sample["row"],
             z=bh_sample["layer"],
             mode="markers",
-            marker=dict(
-                size=3,
-                color="cyan",
-                opacity=0.4,
-            ),
+            marker={
+                "size": 3,
+                "color": "cyan",
+                "opacity": 0.4,
+            },
             name=f"Black holes ({len(bh)} total)",
             hovertemplate="col=%{x}, row=%{y}, layer=%{z}<extra>Black hole</extra>",
         ))
@@ -146,19 +146,19 @@ def main():
     fig = go.Figure(data=traces)
     fig.update_layout(
         title=f"3D Structure — Run {run_id}, timestep {timestep}",
-        scene=dict(
-          xaxis_title="Col",
-          yaxis_title="Row",
-          zaxis_title="Layer",
-          bgcolor="black",
-          xaxis=dict(gridcolor="#333", zerolinecolor="#333", backgroundcolor="black"),
-          yaxis=dict(gridcolor="#333", zerolinecolor="#333", backgroundcolor="black"),
-          zaxis=dict(gridcolor="#333", zerolinecolor="#333", backgroundcolor="black"),
-      ),
+        scene={
+          "xaxis_title": "Col",
+          "yaxis_title": "Row",
+          "zaxis_title": "Layer",
+          "bgcolor": "black",
+          "xaxis": {"gridcolor": "#333", "zerolinecolor": "#333", "backgroundcolor": "black"},
+          "yaxis": {"gridcolor": "#333", "zerolinecolor": "#333", "backgroundcolor": "black"},
+          "zaxis": {"gridcolor": "#333", "zerolinecolor": "#333", "backgroundcolor": "black"},
+      },
         paper_bgcolor="black",
-        font=dict(color="white"),
-        legend=dict(x=0, y=1),
-        margin=dict(l=0, r=0, t=40, b=0),
+        font={"color": "white"},
+        legend={"x": 0, "y": 1},
+        margin={"l": 0, "r": 0, "t": 40, "b": 0},
     )
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

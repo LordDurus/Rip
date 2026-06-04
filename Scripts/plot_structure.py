@@ -89,7 +89,7 @@ def connected_components(structure, target_class):
 
 def project_2d(density):
     """Project 3D density grid to 2D by taking the max density along depth axis."""
-    return np.max(density, axis=2)
+    return np.nanmax(density, axis=2)
 
 
 def main():
