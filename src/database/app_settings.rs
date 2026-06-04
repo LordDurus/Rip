@@ -138,6 +138,8 @@ pub struct AppSettings {
     pub accretion_rate: f64,
     /// Rate at which the rip field drains matter out of normal spacetime each timestep.
     pub rip_drain_rate: f64,
+    /// Scaling factor converting matter loss per timestep to expansion rate.
+    pub matter_expansion_rate: f64,
 }
 
 impl AppSettings {
@@ -247,9 +249,8 @@ impl AppSettings {
             num_galaxies: 1_000_000,
             */
             num_runs: get_usize("NUM_RUNS"),
-            // time_step: 100,
             num_cores: get_u32("NUM_CORES"),
-            // dark_energy: -1.0,
+            matter_expansion_rate: get_f64("MATTER_EXPANSION_RATE"),
             rip_induced_threshold: get_f64("RIP_INDUCED_THRESHOLD"),
             accretion_rate: get_f64("ACCRETION_RATE"),
             rip_drain_rate: get_f64("RIP_DRAIN_RATE"),
