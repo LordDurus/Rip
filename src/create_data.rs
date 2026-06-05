@@ -100,8 +100,21 @@ fn set_as_black_hole(cell: &mut Cell, next_black_hole_id: &Arc<Mutex<u64>>) {
     *id += 1;
     drop(id);
 
-    cell.matter_density = 1.0e30;
-    cell.dimple_strength = 1.0e30;
+    // cell.matter_density = 1.0e30;
+    // cell.dimple_strength = 1.0e30;
+}
+
+/// Relax a black hole back into an ordinary cell once it has drained below the
+/// reversal threshold. Mirror of `set_as_black_hole`.
+fn revert_black_hole(cell: &mut Cell) {
+    cell.is_black_hole = false;
+    cell.black_hole_id = None;
+    cell.is_rip_induced = false;
+    cell.is_supermassive = false;
+    cell.smbh_rip_contribution = false;
+    // Intentionally left alone: matter_density / dimple_strength / curvature.
+    // matter_density now holds the real residual, which re-enters total_matter on
+    // this flip — that's your contraction kick. mass recomputes from it next step.
 }
 
 struct RawModeGuard;
@@ -306,6 +319,18 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                             let accretion = (app_settings.accretion_rate * gravity_magnitude * cell.matter_density).min(cell.matter_density * 0.01);
                             let drain = app_settings.rip_drain_rate * cell.rip_strength * cell.matter_density;
                             cell.matter_density = (cell.matter_density + accretion - drain).max(0.0);
+                        } else {
+                            // black hole: drain (the clock), then relax once it's dropped below threshold
+                            cell.matter_density = (cell.matter_density - app_settings.bh_drain_rate * cell.matter_density).max(0.0);
+
+                            let below = if cell.is_rip_induced {
+                                cell.rip_strength < app_settings.rip_induced_threshold * 0.5
+                            } else {
+                                cell.matter_density < app_settings.collapse_density_threshold * 0.5
+                            };
+                            if below {
+                                revert_black_hole(cell);
+                            }
                         }
                     });
                 });
@@ -323,7 +348,13 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                 .sum();
 
             let matter_delta = previous_total_matter - current_total_matter;
-            scale_factor = (scale_factor * f64::exp(matter_delta * app_settings.matter_expansion_rate)).max(1.0);
+
+            //  the following code should be faithful to exp(k·(M₀−Mₜ))
+            scale_factor = scale_factor * f64::exp(matter_delta * app_settings.matter_expansion_rate);
+            if scale_factor.is_nan() || scale_factor.is_infinite() {
+                panic!("scale_factor non-finite at timestep {}: {} (matter_delta {})", timestep, scale_factor, matter_delta);
+            }
+
             previous_total_matter = current_total_matter;
 
             // Apply gravity to particles and update dimple strength

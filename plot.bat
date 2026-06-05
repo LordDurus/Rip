@@ -7,7 +7,7 @@ setlocal
 
 :: Defaults
 set run_id=1
-set timestep=2000
+set timestep=499
 
 :: Override if arguments provided
 if not "%~1"=="" set run_id=%~1
@@ -28,7 +28,6 @@ py plot_cmb_power.py --run-id %run_id% --timestep %timestep% --field curvature
 py plot_cmb_power.py --run-id %run_id% --timestep %timestep% --field rip_strength
 py plot_structure.py --run-id %run_id% --timestep %timestep%
 py plot_3d.py --run-id %run_id% --timestep %timestep% --density-percentile 95
-
 cd ..
 
 echo Done.

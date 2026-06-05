@@ -25,7 +25,10 @@ impl DbProvider for SqliteProvider {
 
         let tx = self.conn.transaction()?;
 
-        tx.execute("insert into run (started_at, status, seed, notes) values (?1, 'running', ?2, ?3)", params![started_at, seed as i64, notes])?;
+        tx.execute(
+            "insert into run (started_at, status, seed, notes) values (?1, 'running', ?2, ?3)",
+            params![started_at, seed as i64, notes],
+        )?;
         let run_id = tx.last_insert_rowid();
 
         // Snapshot current app_setting into run_setting
@@ -107,11 +110,13 @@ impl DbProvider for SqliteProvider {
                 }
             }
         }
+
         if !buffer.is_empty() {
             Self::insert_batch(&tx, run_id, &buffer)?;
         }
 
         tx.commit()?;
+
         Ok(())
     }
 
@@ -126,9 +131,6 @@ impl DbProvider for SqliteProvider {
         for col in grid {
             for row in col {
                 for cell in row {
-                    total_rip_strength += cell.rip_strength;
-                    total_scale_factor += cell.scale_factor;
-
                     total_rip_strength += cell.rip_strength;
                     total_scale_factor += cell.scale_factor;
 
@@ -156,20 +158,34 @@ impl DbProvider for SqliteProvider {
         self.conn.execute(
             "insert into timestep_summary (timestep, time_myr, rip_strength_avg, scale_factor_avg, run_id, total_matter, black_hole_count, gravity_magnitude_avg)
 				 values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![timestep as i64, time_myr, avg_rip_strength, avg_scale_factor, run_id, total_matter, black_hole_count, avg_gravity_magnitude],
+            params![
+                timestep as i64,
+                time_myr,
+                avg_rip_strength,
+                avg_scale_factor,
+                run_id,
+                total_matter,
+                black_hole_count,
+                avg_gravity_magnitude
+            ],
         )?;
 
         Ok(())
     }
 
     fn get_or_insert_cell_position(&mut self, col: usize, row: usize) -> CellPosition {
-        let mut stmt = self.conn.prepare("select cell_position_id from cell_position where col = ?1 and row = ?2").expect("Failed to prepare select");
+        let mut stmt = self
+            .conn
+            .prepare("select cell_position_id from cell_position where col = ?1 and row = ?2")
+            .expect("Failed to prepare select");
 
         if let Ok(row_id) = stmt.query_row(params![col, row], |row| row.get(0)) {
             return CellPosition { cell_position_id: row_id, col, row };
         }
 
-        self.conn.execute("insert into cell_position (col, row) values (?1, ?2)", params![col, row]).expect("Failed to insert cell_position");
+        self.conn
+            .execute("insert into cell_position (col, row) values (?1, ?2)", params![col, row])
+            .expect("Failed to insert cell_position");
 
         let id = self.conn.last_insert_rowid();
 
@@ -188,7 +204,10 @@ impl DbProvider for SqliteProvider {
 
         dbg!("[{}] [{}] {}: {}", timestamp, level_str, module, message);
 
-        self.conn.execute("insert into log (run_id, timestamp, module, level, message) values (?1, ?2, ?3, ?4, ?5)", (run_id, timestamp, module, level_str, message))?;
+        self.conn.execute(
+            "insert into log (run_id, timestamp, module, level, message) values (?1, ?2, ?3, ?4, ?5)",
+            (run_id, timestamp, module, level_str, message),
+        )?;
 
         return Ok(());
     }

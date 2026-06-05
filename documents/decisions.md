@@ -107,7 +107,7 @@ it from neighbors. Matter is created locally rather than transferred.
 
 **Reason:** True mass-conserving accretion requires computing flux between adjacent
 cells — a more complex implementation. Local accretion is a deliberate simplification
-that captures the qualitative behavior (overdense regions get denser) without the
+that captures the qualitative behavior (over dense regions get denser) without the
 full machinery. Noted as a known limitation in `RESULTS.md`.
 
 ---
