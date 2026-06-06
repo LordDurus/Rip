@@ -7,6 +7,7 @@ use crate::enums::log_level::LogLevel;
 use crate::enums::rip_decay_mechanism::RipDecayMechanism;
 use crate::gravity::compute_gravity_fft;
 use crate::helpers::rip::compute_cell_rip_strength;
+use crate::helpers::transport::apply_matter_transport;
 use crate::initial_geometry::InitialGeometry;
 use crate::populate_grid::populate_grid;
 use colored::Colorize;
@@ -306,6 +307,11 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                         cell.gravity_x = gx[h][w][d];
                         cell.gravity_y = gy[h][w][d];
                         cell.gravity_z = gz[h][w][d];
+
+                        if !cell.is_black_hole {
+                            let g = (cell.gravity_x.powi(2) + cell.gravity_y.powi(2) + cell.gravity_z.powi(2)).sqrt();
+                            cell.curvature = app_settings.gravity_curvature_coupling * g;
+                        }
                     });
                 });
             });
@@ -335,6 +341,7 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                     });
                 });
             });
+            apply_matter_transport(&mut grid, &app_settings, STEP_DURATION);
 
             // Compute current total matter and update scale factor
             // Matter loss drives expansion; matter gain causes slight contraction.

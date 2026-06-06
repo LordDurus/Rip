@@ -142,6 +142,8 @@ pub struct AppSettings {
     pub matter_expansion_rate: f64,
     /// Rate at which black holes drain matter from the grid each timestep.
     pub bh_drain_rate: f64,
+
+    pub transport_rate: f64,
 }
 
 impl AppSettings {
@@ -238,6 +240,7 @@ impl AppSettings {
         };
 
         AppSettings {
+            transport_rate: get_f64("TRANSPORT_RATE"),
             num_runs: get_usize("NUM_RUNS"),
             num_cores: get_u32("NUM_CORES"),
             matter_expansion_rate: get_f64("MATTER_EXPANSION_RATE"),
