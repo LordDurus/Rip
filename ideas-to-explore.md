@@ -139,4 +139,4 @@ negligible observable difference at current simulation scales.
 - What's the output format — a summary table, a new DB table, or just CSV?
 - Can sweeps be paused/resumed, or are they fire-and-forget?
 
-**When to build:** After Phase 1  (TBD) (matter loss / scale factor correlation) is confirmed and threshold tuning becomes the next bottleneck.
+**When to build:** After Phase 1 (TBD) (matter loss / scale factor correlation) is confirmed and threshold tuning becomes the next bottleneck.
