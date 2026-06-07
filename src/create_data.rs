@@ -307,11 +307,6 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                         cell.gravity_x = gx[h][w][d];
                         cell.gravity_y = gy[h][w][d];
                         cell.gravity_z = gz[h][w][d];
-
-                        if !cell.is_black_hole {
-                            let g = (cell.gravity_x.powi(2) + cell.gravity_y.powi(2) + cell.gravity_z.powi(2)).sqrt();
-                            cell.curvature = app_settings.gravity_curvature_coupling * g;
-                        }
                     });
                 });
             });
@@ -320,12 +315,7 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
             grid.par_iter_mut().for_each(|col| {
                 col.iter_mut().for_each(|row| {
                     row.iter_mut().for_each(|cell| {
-                        if !cell.is_black_hole {
-                            let gravity_magnitude = (cell.gravity_x.powi(2) + cell.gravity_y.powi(2) + cell.gravity_z.powi(2)).sqrt();
-                            let accretion = (app_settings.accretion_rate * gravity_magnitude * cell.matter_density).min(cell.matter_density * 0.01);
-                            let drain = app_settings.rip_drain_rate * cell.rip_strength * cell.matter_density;
-                            cell.matter_density = (cell.matter_density + accretion - drain).max(0.0);
-                        } else {
+                        if cell.is_black_hole {
                             // black hole: drain (the clock), then relax once it's dropped below threshold
                             cell.matter_density = (cell.matter_density - app_settings.bh_drain_rate * cell.matter_density).max(0.0);
 
@@ -337,6 +327,9 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                             if below {
                                 revert_black_hole(cell);
                             }
+                        } else {
+                            let drain = app_settings.rip_drain_rate * cell.rip_strength * cell.matter_density;
+                            cell.matter_density = (cell.matter_density - drain).max(0.0);
                         }
                     });
                 });

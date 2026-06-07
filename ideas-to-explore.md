@@ -118,3 +118,25 @@ permanently lost.
 **Why it's deferred:** Requires computing each particle's inertia as a function of 
 the full matter distribution every timestep. High implementation cost, likely 
 negligible observable difference at current simulation scales.
+---
+
+## External parameter sweep tool
+
+**Concept:** A separate application (not part of the simulation binary) that drives automated parameter sweeps by manipulating `app_setting` values in the database and shelling out to `run`. The simulation itself would need no changes.
+
+**Motivation:** Manual parameter tuning is slow and error-prone. A sweep tool would let you define a parameter space (ranges, step sizes, combinations) and walk it systematically, collecting results across runs for comparison. Essential before any serious threshold calibration or sensitivity analysis.
+
+**Proposed design:**
+- Reads the current `app_setting` table as a baseline
+- Takes a sweep spec (parameter name, min, max, step — or discrete list of values)
+- For each combination: writes the new values to `app_setting`, invokes the simulation, waits for completion, records the run ID and outcome
+- Supports at minimum: single-parameter sweeps, grid sweeps over two parameters, and random sampling over a defined space
+- UI to define and preview the sweep space before committing, and to monitor progress
+
+**Key implementation questions:**
+- Does each run get its own database, or do all runs share one DB (separated by `run_id`)? Shared DB is simpler; separate DBs make parallel runs safer.
+- How does the tool know a run completed successfully vs. crashed?
+- What's the output format — a summary table, a new DB table, or just CSV?
+- Can sweeps be paused/resumed, or are they fire-and-forget?
+
+**When to build:** After Phase 1 (matter loss / scale factor correlation) is confirmed and threshold tuning becomes the next bottleneck.
