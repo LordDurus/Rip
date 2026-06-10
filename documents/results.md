@@ -115,3 +115,48 @@ Black holes can now relax back into ordinary cells once they drain below half th
 
 - Two correctness fixes preceded this run: a copy-paste bug that doubled `scale_factor_avg`/`rip_strength_avg` in the timestep summary, and the removal of the `max(1.0)` floor on the scale factor (which had been hiding the early contraction).
 - The `1e30` black-hole sentinel for `matter_density` was removed; black hole cells now carry their real matter, which is what makes reversal accounting and a clean gravity FFT possible.
+
+---
+
+### Matter transport and structure formation
+
+Conservative two-pass, gravity-driven matter transport (`helpers/transport.rs`) replaced the
+broken non-conservative accretion term. With `transport_rate = 0.025`, matter clusters under its
+own gravity into a cosmic web — filaments, nodes, and voids — with a red (large-scale-weighted)
+matter power spectrum. Higher rates (0.05) over-concentrate into isolated spikes. Transport is a
+**one-way concentrator**: matter only flows downhill, so the rate sets the *timescale* of clumping,
+not its final degree.
+
+### Black-hole formation is transport-sustained
+
+The earlier "Black holes created: 0" was a *survivor* count at the final timestep, not a cumulative
+count. True arc: a synchronized formation wave at t=0, a synchronized reversal wave as those holes
+drain below threshold (early, ~t≈7000 Myr in the inflation plot), then settling. Without transport,
+the count drops to zero and stays there. With transport, surviving matter re-clusters and
+re-collapses, so the population persists (re-formation).
+
+### Headline result: a(t) responds to the black-hole channel only when the diffuse drain is subdominant
+
+a(t) = exp(k · matter_lost). With the diffuse rip drain at `rip_drain_rate = 1.25e-6` (effective
+~1.2%/cell/step after ×rip_strength), the leak dominates the matter budget and a(t) is
+**byte-identical across every configuration** (transport on/off, web/spikes, holes/none) — a smooth
+monotonic ramp to ~1.3. The leak is a *one-way* channel, so a(t) is monotonic by construction and no
+black-hole dynamics can bend it.
+
+Lowering `rip_drain_rate` to `1.25e-8` (~100×) puts the black-hole channel in charge of the matter
+budget. Result (64³, 500 steps):
+
+- ~5114 black holes survive to t=499 (vs 19 under the strong drain), core densities ~430.
+- a(t) breaks from the ~1.3 ramp down to ~1.058 and, critically, shows a **contraction** —
+  d(ln a)/dt goes negative — coinciding with the first reversal wave.
+
+This is the first demonstration that the reversal channel can bend a(t) negative: matter into holes
+expands a(t), matter re-injected from reverting holes contracts it. The core mechanism, on screen.
+
+**Caveat:** one pulse, not a sustained cycle. After the first synchronized wave the population
+de-phases (cells form and revert at staggered times) and a(t) settles into a gentle climb. Sustained
+cycling needs a re-synchronizing driver, not a parameter tweak (see ideas-to-explore).
+
+**Reproducing recipe:** `transport_rate = 0.025`, `rip_drain_rate = 1.25e-8`, curvature = random
+seed (`rng 0.0..0.1`), `curvature_threshold = 0.08`, `collapse_density_threshold = 1.5`, accretion
+removed, gravity write-back active, straight axis pairing.

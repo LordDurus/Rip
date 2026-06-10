@@ -5,10 +5,12 @@
 	"cSpell.words": [
 		"axvline",
 		"backgroundcolor",
+		"baryogenesis",
 		"cmap",
 		"colorbar",
 		"colorscale",
 		"crossterm",
+		"DESI",
 		"dtype",
 		"edgecolor",
 		"figsize",
@@ -19,6 +21,8 @@
 		"hovertemplate",
 		"imshow",
 		"indicatif",
+		"JWST",
+		"leptogenesis",
 		"linestyle",
 		"ltrim",
 		"Machian",
@@ -28,7 +32,11 @@
 		"nanmin",
 		"ndimage",
 		"optipng",
+		"overmassive",
+		"parametrizing",
 		"Perlin",
+		"Poplawski",
+		"recollapses",
 		"rngs",
 		"rtrim",
 		"rusqlite",
@@ -38,6 +46,7 @@
 		"smbh",
 		"steelblue",
 		"suptitle",
+		"unclumped",
 		"unphysical",
 		"viridis",
 		"vmax",
@@ -45,6 +54,7 @@
 		"xlabel",
 		"ylabel",
 		"zaxis",
-		"zerolinecolor"
+		"zerolinecolor",
+		"ΛCDM"
 	]
 }
