@@ -120,11 +120,9 @@ impl DbProvider for SqliteProvider {
         Ok(())
     }
 
-    fn record_timestep_summary(&mut self, timestep: usize, step_duration_myr: f64, grid: &Vec<Vec<Vec<Cell>>>, run_id: i64) -> Result<()> {
+    fn record_timestep_summary(&mut self, timestep: usize, step_duration_myr: f64, grid: &Vec<Vec<Vec<Cell>>>, run_id: i64, scale_factor: f64, total_matter: f64) -> Result<()> {
         let mut total_rip_strength = 0.0;
-        let mut total_scale_factor = 0.0;
         let mut black_hole_count: i64 = 0;
-        let mut total_matter = 0.0;
         let mut cell_count = 0;
         let mut total_gravity_magnitude = 0.0;
 
@@ -132,17 +130,12 @@ impl DbProvider for SqliteProvider {
             for row in col {
                 for cell in row {
                     total_rip_strength += cell.rip_strength;
-                    total_scale_factor += cell.scale_factor;
 
                     let gm = (cell.gravity_x.powi(2) + cell.gravity_y.powi(2) + cell.gravity_z.powi(2)).sqrt();
-                    total_gravity_magnitude += gm; // NEW
+                    total_gravity_magnitude += gm;
 
-                    // Black holes have matter_density = 1e30 sentinel — exclude them,
-                    // since that matter has "left" normal spacetime (fallen into the rip)
                     if cell.is_black_hole {
                         black_hole_count += 1;
-                    } else {
-                        total_matter += cell.matter_density;
                     }
 
                     cell_count += 1;
@@ -151,7 +144,7 @@ impl DbProvider for SqliteProvider {
         }
         let avg_gravity_magnitude = total_gravity_magnitude / cell_count as f64;
         let avg_rip_strength = finite_or_zero(total_rip_strength / cell_count.max(1) as f64);
-        let avg_scale_factor = finite_or_zero(total_scale_factor / cell_count.max(1) as f64);
+        let avg_scale_factor = finite_or_zero(scale_factor);
 
         let time_myr = timestep as f64 * step_duration_myr;
 

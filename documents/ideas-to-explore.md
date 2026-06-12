@@ -140,3 +140,52 @@ negligible observable difference at current simulation scales.
 - Can sweeps be paused/resumed, or are they fire-and-forget?
 
 **When to build:** After Phase 1 (matter loss / scale factor correlation) is confirmed and threshold tuning becomes the next bottleneck.
+
+---
+
+## GR and QM as phase descriptions, not broken theories
+
+**Hypothesis:** The unification of General Relativity and Quantum Mechanics may be a category error. Water doesn't have a single unified equation covering ice, liquid, and steam — it has the correct equations for each phase. GR and QM may simply be the correct descriptions of different phases of the same underlying reality, not incomplete fragments of a single theory waiting to be merged.
+
+**Why it's interesting:** Both theories are extraordinarily accurate in their own domains. The repeated failure of unification efforts may not indicate the theories are incomplete — it may indicate that demanding one equation cover both phases is the wrong goal. The rip threshold fits naturally into this framing: it's a phase boundary, and the math "failing" at a singularity is the correct signal that the rules are changing, not a flaw to be fixed.
+
+**Things to think through when revisiting:**
+- What is the underlying "substance" that transitions between phases? Spacetime geometry? Matter-energy? Something more fundamental?
+- What determines which phase a region is in — energy density, curvature, something else?
+- Does this framing make any testable predictions, or is it purely interpretive?
+- If the rip is a phase boundary, does the simulation produce behavior at that boundary that neither GR nor QM would predict cleanly?
+
+**Gate:** Philosophical for now. Revisit if simulation results show anomalous behavior at rip boundaries that doesn't fit either relativistic or quantum predictions.
+
+---
+
+## Matter phase transition at rip boundaries
+
+**Hypothesis:** Rather than matter crossing into a child geometry, a rip boundary is a phase transition. Matter becomes gravitationally inert — still present in this spacetime, still conserved, but no longer warping space. Analogous to water changing state: same substance, different behavioral rules.
+
+**Why it's interesting:**
+- No conservation problem — matter stays in this spacetime
+- Dark matter falls out naturally as phase-transitioned matter: gravitationally inert, electromagnetically decoupled, still present and detectable only indirectly
+- Expansion driven by reduction in gravitationally active matter fraction rather than matter loss to a child geometry
+
+**Where it broke down:**
+- Universe creation is no longer a natural fallout of the mechanism. Under the child geometry model a new universe emerges almost for free — matter crosses, the geometry expands, done. Under phase transition you have to explain what the rip *is* if nothing crosses it, which requires new assumptions that cost more than they save.
+- Opens more unresolved questions than it closes at this stage.
+
+**Possible reconciliation:** Phase transition may describe moderate gravitational stress events; child geometry crossing may describe extreme stress. The two mechanisms could coexist at different scales — stellar vs. supermassive black holes already behave differently, and this could be why.
+
+**Gate:** Park until the simulation produces behavior the child geometry model can't account for, or until conservation accounting demands a cleaner story. The child geometry model remains the active hypothesis.
+
+---
+
+## Parameter sweep as empirical phase boundary locator
+
+**Concept:** The parameter sweep tool is not just a tuning instrument — it may be capable of empirically locating the GR/QM phase boundary. If the simulation can reproduce large-scale cosmological behavior from first principles, sweeping the parameter space and observing where macro behavior *transitions* identifies the boundary conditions of that transition. That boundary is the phase transition point between regimes.
+
+**Why it's significant:** You wouldn't be deriving GR or QM from scratch. You'd be doing something more useful — finding the conditions under which the system stops behaving like one and starts behaving like the other. The transition emerges from the data rather than being assumed from theory. This is exactly how phase boundaries are characterized in any other physical system: not derived from first principles, but measured at the point where behavior changes.
+
+**The approach is hypothesis-neutral by design:** The sweep explores the space, the simulation produces behavior, the boundary is wherever the data says it is.
+
+**Early candidate:** The JWST supermassive black hole anomaly sits close to this boundary — quantum-scale rapid collapse producing objects that then dominated large-scale structure. Already on the roadmap and already probing the right regime.
+
+**Gate:** Requires the parameter sweep tool to be built and the core simulation to be reproducing cosmological behavior reliably. Revisit after the sweep tool is operational and the JWST branch produces results.

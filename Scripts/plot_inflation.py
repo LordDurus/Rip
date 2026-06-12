@@ -55,7 +55,7 @@ def main():
 
     df = pd.read_sql_query(
         """
-        SELECT timestep, time_myr, scale_factor_avg
+        SELECT timestep, time_myr, scale_factor
         FROM timestep_summary
         WHERE run_id = ?
         ORDER BY timestep
@@ -71,7 +71,7 @@ def main():
     print(f"Loaded {len(df)} timesteps.")
 
     time = df["time_myr"].values
-    scale = df["scale_factor_avg"].values
+    scale = df["scale_factor"].values
 
     # Growth rate: d(ln a)/dt — the inflation signature.
     # High during inflation, drops toward zero when expansion stops.

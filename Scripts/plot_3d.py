@@ -51,7 +51,9 @@ def main():
     parser.add_argument("--timestep", type=int, default=None,
                         help="Timestep to visualize (default: matter density peak)")
     parser.add_argument("--density-percentile", type=float, default=80,
-                        help="Only show non-BH cells above this density percentile (default: 80)")
+                        help="Node threshold — cells above this percentile are nodes (default: 80)")
+    parser.add_argument("--filament-low-percentile", type=float, default=50,
+                        help="Filament lower bound — cells between this and density-percentile are filaments (default: 50)")
     parser.add_argument("--no-html", action="store_true",
                         help="Skip HTML output, PNG only")
     parser.add_argument("--no-png", action="store_true",
@@ -97,37 +99,61 @@ def main():
     bh = df[df["is_black_hole"] == 1].copy()
     normal = df[df["is_black_hole"] == 0].copy()
 
-    # Only show high-density normal cells to avoid overcrowding
-    density_thresh = np.percentile(normal["matter_density"], args.density_percentile)
-    normal_filtered = normal[normal["matter_density"] >= density_thresh]
+    # Classify normal cells into nodes (top density_percentile%) and filaments (mid-band)
+    node_thresh = np.percentile(normal["matter_density"], args.density_percentile)
+    filament_low = np.percentile(normal["matter_density"], args.filament_low_percentile)
 
-    print(f"Black holes: {len(bh)}")
-    print(f"High-density cells shown: {len(normal_filtered)} "
-          f"(top {100 - args.density_percentile:.0f}% of {len(normal)} non-BH cells)")
-    print(f"Density threshold: {density_thresh:.4f}")
+    nodes = normal[normal["matter_density"] >= node_thresh]
+    filaments = normal[(normal["matter_density"] >= filament_low) &
+                       (normal["matter_density"] < node_thresh)]
+    # Voids (below filament_low) are not rendered — the black background says it all
+
+    print(f"Black holes:    {len(bh)}")
+    print(f"Node cells:     {len(nodes)} (top {100 - args.density_percentile:.0f}%)")
+    print(f"Filament cells: {len(filaments)} "
+          f"({args.filament_low_percentile:.0f}–{args.density_percentile:.0f}th percentile)")
+    print(f"Node threshold:          {node_thresh:.4f}")
+    print(f"Filament low threshold:  {filament_low:.4f}")
 
     traces = []
 
-    # High-density matter cells — colored by density
-    traces.append(go.Scatter3d(
-        x=normal_filtered["col"],
-        y=normal_filtered["row"],
-        z=normal_filtered["layer"],
-        mode="markers",
-        marker={
-            "size": 2,
-            "color": normal_filtered["matter_density"],
-            "colorscale": "Plasma",
-            "colorbar": {"title": "Matter Density", "x": 1.0},
-            "opacity": 0.6,
-        },
-        name="High-density matter",
-        hovertemplate="col=%{x}, row=%{y}, layer=%{z}<br>density=%{marker.color:.4f}<extra></extra>",
-    ))
+    # Filaments — transparent light green, rendered first (behind nodes)
+    if len(filaments) > 0:
+        filament_sample = filaments.sample(min(len(filaments), 20000), random_state=42) if len(filaments) > 20000 else filaments
+        traces.append(go.Scatter3d(
+            x=filament_sample["col"],
+            y=filament_sample["row"],
+            z=filament_sample["layer"],
+            mode="markers",
+            marker={
+                "size": 1.5,
+                "color": "lightgreen",
+                "opacity": 0.25,
+            },
+            name=f"Filaments ({len(filaments)} cells)",
+            hovertemplate="col=%{x}, row=%{y}, layer=%{z}<extra>Filament</extra>",
+        ))
 
-    # Black holes — fixed cyan color, slightly larger
+    # Nodes — plasma colorscale by density, rendered on top of filaments
+    if len(nodes) > 0:
+        traces.append(go.Scatter3d(
+            x=nodes["col"],
+            y=nodes["row"],
+            z=nodes["layer"],
+            mode="markers",
+            marker={
+                "size": 2.5,
+                "color": nodes["matter_density"],
+                "colorscale": "Plasma",
+                "colorbar": {"title": "Matter Density", "x": 1.0},
+                "opacity": 0.7,
+            },
+            name=f"Nodes (top {100 - args.density_percentile:.0f}%)",
+            hovertemplate="col=%{x}, row=%{y}, layer=%{z}<br>density=%{marker.color:.4f}<extra></extra>",
+        ))
+
+    # Black holes — fixed cyan, slightly larger
     if len(bh) > 0:
-        # Downsample BH if too many for smooth rendering
         bh_sample = bh.sample(min(len(bh), 5000), random_state=42) if len(bh) > 5000 else bh
         traces.append(go.Scatter3d(
             x=bh_sample["col"],
