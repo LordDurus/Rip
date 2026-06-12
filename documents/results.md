@@ -160,3 +160,30 @@ cycling needs a re-synchronizing driver, not a parameter tweak (see ideas-to-exp
 **Reproducing recipe:** `transport_rate = 0.025`, `rip_drain_rate = 1.25e-8`, curvature = random
 seed (`rng 0.0..0.1`), `curvature_threshold = 0.08`, `collapse_density_threshold = 1.5`, accretion
 removed, gravity write-back active, straight axis pairing.
+---
+
+## Phase 1 Confirmed: Matter Loss Correlates with Expansion
+
+<img src="images/matter_run1.png" alt="Total matter vs scale factor" width="600">
+
+**Run:** 1 &nbsp;|&nbsp; **Grid:** 64×64×64 &nbsp;|&nbsp; **Timesteps:** 5000
+
+### What it shows
+
+A direct plot of `total_matter` (non-BH cells only, left axis) against `scale_factor` (right axis) over the full run. The two curves are mirror images: as matter falls into black holes and leaves normal spacetime, the scale factor rises in lockstep.
+
+Key features:
+
+- **Early spike (t < 200):** The initial BH formation wave drives a sharp drop in total matter and a corresponding fast rise in scale factor — the bulk of the expansion happens here.
+- **Matched deceleration:** Both curves flatten at the same rate after ~t=1000, consistent with expansion being driven by the *rate* of matter loss — as d(matter)/dt slows, so does d(a)/dt.
+- **Clean anti-correlation throughout:** The relationship holds across all 5000 timesteps without divergence or anomaly.
+
+### Why it matters
+
+This is the Phase 1 hypothesis test: does matter loss from normal spacetime correlate with expansion? The answer is unambiguous — yes, and the shape of the correlation is exactly what the mechanism predicts. The scale factor is not being driven by an abstract formula; it tracks the matter budget directly.
+
+This result justifies proceeding to Phase 2: rewiring `compute_scale_factor` to use −d(total_matter)/dt as its direct input, replacing the current per-cell average.
+
+### Next step
+
+Phase 2 — rewire `compute_scale_factor` to derive expansion rate from `−d(total_matter)/dt` computed from `timestep_summary`, making the matter-loss-drives-expansion mechanism explicit rather than implicit.

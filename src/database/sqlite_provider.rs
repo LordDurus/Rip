@@ -156,7 +156,7 @@ impl DbProvider for SqliteProvider {
         let time_myr = timestep as f64 * step_duration_myr;
 
         self.conn.execute(
-            "insert into timestep_summary (timestep, time_myr, rip_strength_avg, scale_factor_avg, run_id, total_matter, black_hole_count, gravity_magnitude_avg)
+            "insert into timestep_summary (timestep, time_myr, rip_strength_avg, scale_factor, run_id, total_matter, black_hole_count, gravity_magnitude_avg)
 				 values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 timestep as i64,

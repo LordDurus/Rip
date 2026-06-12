@@ -28,6 +28,7 @@ py plot_cmb_power.py --run-id %run_id% --timestep %timestep% --field curvature
 py plot_cmb_power.py --run-id %run_id% --timestep %timestep% --field rip_strength
 py plot_structure.py --run-id %run_id% --timestep %timestep%
 py plot_3d.py --run-id %run_id% --timestep %timestep% --density-percentile 95
+py plot_matter.py --run-id %run_id%
 cd ..
 
 echo Done.
