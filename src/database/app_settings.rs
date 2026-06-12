@@ -138,6 +138,12 @@ pub struct AppSettings {
     pub accretion_rate: f64,
     /// Rate at which the rip field drains matter out of normal spacetime each timestep.
     pub rip_drain_rate: f64,
+    /// Scaling factor converting matter loss per timestep to expansion rate.
+    pub matter_expansion_rate: f64,
+    /// Rate at which black holes drain matter from the grid each timestep.
+    pub bh_drain_rate: f64,
+
+    pub transport_rate: f64,
 }
 
 impl AppSettings {
@@ -157,7 +163,10 @@ impl AppSettings {
                         return Err(rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)));
                     }
                 },
-                "int" | "i64" => val.parse::<i64>().map(AppValue::Int).map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))),
+                "int" | "i64" => val
+                    .parse::<i64>()
+                    .map(AppValue::Int)
+                    .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))),
                 "u32" => val.parse::<u32>().map(|v| AppValue::Int(v as i64)).map_err(|e| {
                     println!("Invalid u32 setting - key: {}, type: u32, value: {:?}", key, val);
                     rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
@@ -231,28 +240,14 @@ impl AppSettings {
         };
 
         AppSettings {
-            // initial_mass: get_f64("INITIAL_MASS"),
-            // initial_bh_mass: get_f64("INITIAL_BH_MASS"),
-            // matter_fadeout_time_myr: get_f64("MATTER_FADEOUT_TIME_MYR"),
-            // sim_duration: get_usize("SIM_DURATION"),
-            // NUM_GALAXIES: get_usize("NUM_GALAXIES"),
-            // num_runs: get_usize("NUM_RUNS"),
-            // time_step: get_usize("TIME_STEP"),
-            // W_DARK_ENERGY: get_f64("W_DARK_ENERGY"),
-            /*
-            sim_duration: 13_800,
-            initial_mass: 1.0e12,
-            initial_bh_mass: 0.0,
-            matter_fadeout_time_myr: 5000.0,
-            num_galaxies: 1_000_000,
-            */
+            transport_rate: get_f64("TRANSPORT_RATE"),
             num_runs: get_usize("NUM_RUNS"),
-            // time_step: 100,
             num_cores: get_u32("NUM_CORES"),
-            // dark_energy: -1.0,
+            matter_expansion_rate: get_f64("MATTER_EXPANSION_RATE"),
             rip_induced_threshold: get_f64("RIP_INDUCED_THRESHOLD"),
             accretion_rate: get_f64("ACCRETION_RATE"),
             rip_drain_rate: get_f64("RIP_DRAIN_RATE"),
+            bh_drain_rate: get_f64("BH_DRAIN_RATE"),
             gravity: get_f64("GRAVITY"),
             light_speed: get_f64("LIGHT_SPEED"),
             decay_factor: get_f64("DECAY_FACTOR"),

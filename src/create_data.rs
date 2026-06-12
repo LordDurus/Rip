@@ -7,6 +7,7 @@ use crate::enums::log_level::LogLevel;
 use crate::enums::rip_decay_mechanism::RipDecayMechanism;
 use crate::gravity::compute_gravity_fft;
 use crate::helpers::rip::compute_cell_rip_strength;
+use crate::helpers::transport::apply_matter_transport;
 use crate::initial_geometry::InitialGeometry;
 use crate::populate_grid::populate_grid;
 use colored::Colorize;
@@ -41,22 +42,6 @@ fn initialize_particles(positions: &mut Vec<(f64, f64, f64)>, velocities: &mut V
 }
 
 #[inline(always)]
-fn compute_scale_factor(scale: f64, timestep: usize, settings: &AppSettings, step_duration: f64) -> f64 {
-    let ramp = 1.0 - f64::exp(-settings.rip_decay_rate * timestep as f64);
-    let decay = f64::exp(-settings.rip_evaporation_rate * timestep as f64);
-    let healing = 1.0; // placeholder for future healing mechanism
-    let rip_strength = settings.rip_initial * ramp * decay * healing;
-
-    let expansion_factor = rip_strength.sqrt() * step_duration;
-    // if expansion_factor > 0.05 {
-    // Expansion tapers smoothly: as global_rip_strength decays, expansion_factor → 0
-    // and the multiplier exp(expansion_factor) → 1 (no growth). No hard cutoff.
-    return scale * f64::exp(expansion_factor);
-    // }
-    //return scale;
-}
-
-#[inline(always)]
 fn apply_gravity_to_particle(particle: &mut StructureParticle, gravity: (f64, f64, f64), timestep: f64) {
     particle.velocity_x += gravity.0 * timestep;
     particle.velocity_y += gravity.1 * timestep;
@@ -83,7 +68,11 @@ pub fn map_particle_to_cell(x: f64, y: f64, z: f64, grid_width: usize, grid_heig
     let row = ((y + 1.0) / 2.0 * grid_height as f64).floor() as usize;
     let layer = ((z + 1.0) / 2.0 * grid_depth as f64).floor() as usize;
 
-    if col < grid_width && row < grid_height && layer < grid_depth { Some((col, row, layer)) } else { None }
+    if col < grid_width && row < grid_height && layer < grid_depth {
+        Some((col, row, layer))
+    } else {
+        None
+    }
 }
 
 fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSettings, db: &mut dyn DbProvider) {
@@ -112,8 +101,21 @@ fn set_as_black_hole(cell: &mut Cell, next_black_hole_id: &Arc<Mutex<u64>>) {
     *id += 1;
     drop(id);
 
-    cell.matter_density = 1.0e30;
-    cell.dimple_strength = 1.0e30;
+    // cell.matter_density = 1.0e30;
+    // cell.dimple_strength = 1.0e30;
+}
+
+/// Relax a black hole back into an ordinary cell once it has drained below the
+/// reversal threshold. Mirror of `set_as_black_hole`.
+fn revert_black_hole(cell: &mut Cell) {
+    cell.is_black_hole = false;
+    cell.black_hole_id = None;
+    cell.is_rip_induced = false;
+    cell.is_supermassive = false;
+    cell.smbh_rip_contribution = false;
+    // Intentionally left alone: matter_density / dimple_strength / curvature.
+    // matter_density now holds the real residual, which re-enters total_matter on
+    // this flip — that's your contraction kick. mass recomputes from it next step.
 }
 
 struct RawModeGuard;
@@ -151,7 +153,16 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
 
         let seed: u64 = rand::thread_rng().r#gen();
         let run = db.start_run(seed, Some("baseline")).expect("Failed to start run");
-        println!("{} {}{}{} {}{}{}", "Starting run".white(), (run_index + 1), " of ".white(), app_settings.num_runs, "(run_id=".white(), run.run_id, ")".white());
+        println!(
+            "{} {}{}{} {}{}{}",
+            "Starting run".white(),
+            (run_index + 1),
+            " of ".white(),
+            app_settings.num_runs,
+            "(run_id=".white(),
+            run.run_id,
+            ")".white()
+        );
 
         let mut grid = vec![vec![vec![Cell::new(); app_settings.inf_grid_depth]; app_settings.inf_grid_width]; app_settings.inf_grid_height];
 
@@ -169,6 +180,15 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
             return Err(err.into());
         }
 
+        // Compute initial total matter as baseline for expansion calculation
+        let mut previous_total_matter: f64 = grid
+            .iter()
+            .flat_map(|col| col.iter())
+            .flat_map(|row| row.iter())
+            .filter(|cell| !cell.is_black_hole)
+            .map(|cell| cell.matter_density)
+            .sum();
+
         let mut particles: Vec<StructureParticle> = positions
             .iter()
             .zip(velocities.iter())
@@ -185,7 +205,10 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
             })
             .collect();
 
-        let raw_density = Arc::new(Mutex::new(vec![vec![vec![0.0; app_settings.inf_grid_depth]; app_settings.inf_grid_width]; app_settings.inf_grid_height]));
+        let raw_density = Arc::new(Mutex::new(vec![
+            vec![vec![0.0; app_settings.inf_grid_depth]; app_settings.inf_grid_width];
+            app_settings.inf_grid_height
+        ]));
         let next_black_hole_id: Arc<Mutex<u64>> = Arc::new(Mutex::new(1));
         let mut scale_factor = 1.0;
 
@@ -231,8 +254,6 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                 break;
             }
 
-            scale_factor = compute_scale_factor(scale_factor, timestep, &app_settings, STEP_DURATION);
-
             grid.par_iter_mut().enumerate().for_each(|(height, col)| {
                 let running = Arc::clone(&running);
                 col.iter_mut().enumerate().for_each(|(width, row)| {
@@ -244,8 +265,6 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                         cell.timestep = timestep;
                         cell.scale_factor = scale_factor;
                         cell.rip_strength = compute_cell_rip_strength(timestep, cell, &app_settings, &decay_mechanism, STEP_DURATION);
-
-                        // cell.apply_gravity_interaction(app_settings.gravity_density_coupling, app_settings.gravity_curvature_coupling);
 
                         // Black hole formation — set_as_black_hole marks dirty internally
                         if !cell.is_black_hole {
@@ -273,7 +292,13 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                 raw.clone()
             };
 
-            let (gx, gy, gz) = compute_gravity_fft(&density_snapshot, app_settings.gravity, app_settings.inf_grid_height, app_settings.inf_grid_width, app_settings.inf_grid_depth);
+            let (gx, gy, gz) = compute_gravity_fft(
+                &density_snapshot,
+                app_settings.gravity,
+                app_settings.inf_grid_height,
+                app_settings.inf_grid_width,
+                app_settings.inf_grid_depth,
+            );
 
             // Write gravity back — only mark dirty if vectors changed meaningfully
             grid.par_iter_mut().enumerate().for_each(|(h, col)| {
@@ -290,19 +315,58 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
             grid.par_iter_mut().for_each(|col| {
                 col.iter_mut().for_each(|row| {
                     row.iter_mut().for_each(|cell| {
-                        if !cell.is_black_hole {
-                            let gravity_magnitude = (cell.gravity_x.powi(2) + cell.gravity_y.powi(2) + cell.gravity_z.powi(2)).sqrt();
-                            let accretion = (app_settings.accretion_rate * gravity_magnitude * cell.matter_density).min(cell.matter_density * 0.01);
+                        if cell.is_black_hole {
+                            // black hole: drain (the clock), then relax once it's dropped below threshold
+                            cell.matter_density = (cell.matter_density - app_settings.bh_drain_rate * cell.matter_density).max(0.0);
+
+                            let below = if cell.is_rip_induced {
+                                cell.rip_strength < app_settings.rip_induced_threshold * 0.5
+                            } else {
+                                cell.matter_density < app_settings.collapse_density_threshold * 0.5
+                            };
+                            if below {
+                                revert_black_hole(cell);
+                            }
+                        } else {
                             let drain = app_settings.rip_drain_rate * cell.rip_strength * cell.matter_density;
-                            cell.matter_density = (cell.matter_density + accretion - drain).max(0.0);
+                            cell.matter_density = (cell.matter_density - drain).max(0.0);
                         }
                     });
                 });
             });
+            apply_matter_transport(&mut grid, &app_settings, STEP_DURATION);
+
+            // Compute current total matter and update scale factor
+            // Matter loss drives expansion; matter gain causes slight contraction.
+            // Scale factor has a floor of 1.0 — the universe cannot un-exist.
+            let current_total_matter: f64 = grid
+                .iter()
+                .flat_map(|col| col.iter())
+                .flat_map(|row| row.iter())
+                .filter(|cell| !cell.is_black_hole)
+                .map(|cell| cell.matter_density)
+                .sum();
+
+            let matter_delta = previous_total_matter - current_total_matter;
+
+            //  the following code should be faithful to exp(k·(M₀−Mₜ))
+            scale_factor = scale_factor * f64::exp(matter_delta * app_settings.matter_expansion_rate);
+            if scale_factor.is_nan() || scale_factor.is_infinite() {
+                panic!("scale_factor non-finite at timestep {}: {} (matter_delta {})", timestep, scale_factor, matter_delta);
+            }
+
+            previous_total_matter = current_total_matter;
 
             // Apply gravity to particles and update dimple strength
             for particle in &mut particles {
-                if let Some((col_idx, row_idx, depth_idx)) = map_particle_to_cell(particle.position_x, particle.position_y, particle.position_z, app_settings.inf_grid_height, app_settings.inf_grid_width, app_settings.inf_grid_depth) {
+                if let Some((col_idx, row_idx, depth_idx)) = map_particle_to_cell(
+                    particle.position_x,
+                    particle.position_y,
+                    particle.position_z,
+                    app_settings.inf_grid_height,
+                    app_settings.inf_grid_width,
+                    app_settings.inf_grid_depth,
+                ) {
                     if let Some(col) = grid.get_mut(col_idx) {
                         if let Some(row) = col.get_mut(row_idx) {
                             if let Some(cell) = row.get_mut(depth_idx) {
