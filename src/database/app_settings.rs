@@ -15,18 +15,6 @@ pub enum AppValue {
 #[derive(Debug, Serialize)]
 /// Holds configuration settings for the cosmological simulation.
 pub struct AppSettings {
-    /*
-    /// Total initial mass of each galaxy in solar masses.
-    pub initial_mass: f64,
-    /// Initial mass of the central black hole in each galaxy (solar masses).
-    pub initial_bh_mass: f64,
-    /// Time (in million years) after which matter density is negligible
-    pub matter_fadeout_time_myr: f64,
-    /// Duration of the simulation in millions of years.
-    pub sim_duration: usize,
-    /// Number of galaxies simulated per run.
-    pub num_galaxies: usize,
-    */
     /// Gravitational constant used in force calculations.
     pub gravity: f64,
     /// Speed of light constant.    
@@ -94,26 +82,8 @@ pub struct AppSettings {
     pub perlin_amplitude: f64,
     /// Seed for the Perlin generator, making a given noise field reproducible.
     pub perlin_seed: u32,
-    /*
-    /// Time step per simulation update (millions of years).///
-    pub time_step: usize,
-    */
     /// Number of CPU cores to use (-1 = all available).
     pub num_cores: u32,
-    /*
-    /// Equation of State parameter (w) describes the pressure-to-density ratio.
-    /// Different types of cosmic "stuff" have characteristic w values:
-    ///
-    /// | Type of Stuff                 | Typical w Value | Behavior                                   |
-    /// |-------------------------------|-----------------|--------------------------------------------|
-    /// | Normal matter (dust)          | w = 0           | Slows expansion, gravity dominates         |
-    /// | Radiation (early universe)    | w = 1/3         | Expands faster (but still decelerates)     |
-    /// | Dark energy (cosmological constant) | w = -1    | Accelerated expansion                      |
-    /// | Phantom energy (hypothetical) | w < -1          | "Big Rip" universe destruction             |
-    ///
-    /// Setting w = -1 models dark energy with constant density causing accelerated expansion.
-    pub dark_energy: f64,
-    */
     /// self_healing, matter_coupled, inverse_strength.
     pub rip_decay_mechanism: String,
     /// TimeOnly mechanism: fraction of rip strength lost per unit time.
@@ -142,8 +112,14 @@ pub struct AppSettings {
     pub matter_expansion_rate: f64,
     /// Rate at which black holes drain matter from the grid each timestep.
     pub bh_drain_rate: f64,
-
+    /// Rate at which gravity-driven matter transport moves matter between cells each timestep
     pub transport_rate: f64,
+    /// Minimum curvature required for supermassive black hole seeding (higher than curvature_threshold).
+    pub smbh_curvature_threshold: f64,
+    /// Base probability of SMBH formation at timestep 0, before time-decay is applied.
+    pub smbh_formation_probability: f64,
+    /// Decay timescale (in timesteps) for SMBH formation probability; smaller = more strongly early-biased.
+    pub smbh_early_bias: f64,
 }
 
 impl AppSettings {
@@ -288,6 +264,9 @@ impl AppSettings {
             decay_inverse_rate: get_f64("DECAY_INVERSE_RATE"),
             gravity_density_coupling: get_f64("GRAVITY_DENSITY_COUPLING"),
             gravity_curvature_coupling: get_f64("GRAVITY_CURVATURE_COUPLING"),
+            smbh_curvature_threshold: get_f64("SMBH_CURVATURE_THRESHOLD"),
+            smbh_formation_probability: get_f64("SMBH_FORMATION_PROBABILITY"),
+            smbh_early_bias: get_f64("SMBH_EARLY_BIAS"),
         }
     }
 
