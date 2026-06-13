@@ -123,6 +123,7 @@ impl DbProvider for SqliteProvider {
     fn record_timestep_summary(&mut self, timestep: usize, step_duration_myr: f64, grid: &Vec<Vec<Vec<Cell>>>, run_id: i64, scale_factor: f64, total_matter: f64) -> Result<()> {
         let mut total_rip_strength = 0.0;
         let mut black_hole_count: i64 = 0;
+        let mut smbh_count: i64 = 0;
         let mut cell_count = 0;
         let mut total_gravity_magnitude = 0.0;
 
@@ -138,6 +139,10 @@ impl DbProvider for SqliteProvider {
                         black_hole_count += 1;
                     }
 
+                    if cell.is_supermassive {
+                        smbh_count += 1;
+                    }
+
                     cell_count += 1;
                 }
             }
@@ -149,8 +154,8 @@ impl DbProvider for SqliteProvider {
         let time_myr = timestep as f64 * step_duration_myr;
 
         self.conn.execute(
-            "insert into timestep_summary (timestep, time_myr, rip_strength_avg, scale_factor, run_id, total_matter, black_hole_count, gravity_magnitude_avg)
-				 values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "insert into timestep_summary (timestep, time_myr, rip_strength_avg, scale_factor, run_id, total_matter, black_hole_count, gravity_magnitude_avg, smbh_count)
+				 values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 timestep as i64,
                 time_myr,
@@ -159,7 +164,8 @@ impl DbProvider for SqliteProvider {
                 run_id,
                 total_matter,
                 black_hole_count,
-                avg_gravity_magnitude
+                avg_gravity_magnitude,
+                smbh_count
             ],
         )?;
 

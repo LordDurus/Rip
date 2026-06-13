@@ -251,3 +251,36 @@ SELECT
 ```
 (paste result here)
 ```
+---
+
+## SMBH matter accounting: which side of the rip is the cell on? (smbh-phase1)
+
+**Context.** To make SMBHs persist rather than drain and revert like normal black holes, we
+need an inflow term — the SMBH should feed faster than it drains. The naive implementation
+(`cell.matter_density += rate * density`) creates matter from nothing, which violates the
+matter budget that drives the scale factor. Before treating that as a mere "known limitation,"
+we asked whether the non-conservation is actually physical within the rip framework.
+
+**The fork.** A black hole in this model is a threshold into a child geometry. Matter crossing
+in leaves our spacetime (this is the basis for matter-loss-drives-expansion). The question is
+what an SMBH *cell* represents for accounting purposes:
+
+- **Parent-side feeder:** the SMBH is a sink in our universe; matter falling in leaves for the
+  child. Under this reading the cell should *lose* matter, and persistence must come from
+  conservative inflow from our own universe's neighbors (transport), not creation.
+- **Child-side boundary:** the cell is where a *parent* universe's rip deposits matter into ours.
+  Under this reading `+= matter` is correct — the matter is arriving from the parent through the
+  boundary. It only looks non-conservative because the simulation models a single layer of what
+  is, in the hypothesis, an infinite nested stack of geometries.
+
+**Working position (not yet resolved).** The SMBH is plausibly *two-sided*: it exists in our
+universe (mass, lensing) while its interior is the boundary to the child. The connection may run
+both ways, so our SMBH is simultaneously our sink and our parent's drain. The apparent
+non-conservation is then a bookkeeping artifact of modeling one layer, not a physics violation.
+
+**Decision for this branch.** Implement persistence via the inflow term and treat the matter as
+arriving from the parent geometry (child-side source), tagged conceptually as rip-return inflow.
+This is flagged as non-conservative *within our single modeled geometry* in RESULTS.md, but the
+reasoning above means it is not necessarily non-physical within the full framework. Revisit if/when
+a multi-layer accounting is attempted. The conservative-transport alternative (feed the SMBH only
+from its own neighbors) is recorded as the rejected-for-now option.

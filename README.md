@@ -76,6 +76,10 @@ The persistent gravitational wells left by partial Rip events distribute through
 
 The large-scale structure of the universe — matter distributed in filaments and sheets surrounding vast empty voids — reflects the distribution of early universe Rip events. Voids are regions where full Rip events consumed matter completely, leaving only dispersed geometry. Filaments are regions of partial Rip well networks along which normal matter later flowed. The cosmic web is the fossil record of early universe Rip activity.
 
+### Stars as Threshold Transients
+
+Between ordinary matter and a black hole lies a band of gravitational stress deep enough to ignite fusion but not deep enough to cross the Rip threshold. Matter concentrating toward a Full Rip passes through this band on its way down. A star is matter caught in that band — a gravity well on its way to becoming a black hole but not yet arrived. This makes stars a transient population rather than a stable endpoint: an ignited concentration either continues to accrete and crosses the threshold into a black hole, or burns its matter away and falls back below the ignition band and goes dark. Because the early universe drove enormous quantities of matter down this gradient quickly, a burst of star formation coincident with the early black hole formation epoch follows directly — matching the observed early rapid star formation seen alongside early black holes, without requiring separate mechanisms for the two.
+
 ### Anomalous Gravitational Lensing
 
 Gravitational lensing detected in regions with insufficient visible matter is explained directly. The lensing is caused by persistent partial Rip wells — stable geometry without matter at the center. There is no invisible particle to detect because there is no particle. The curvature is real. The matter that created it is in a child universe.
@@ -119,7 +123,7 @@ A hypothesis that cannot be tested is not useful. The Rip hypothesis makes speci
 
 - **CMB boundary anomalies should cluster geometrically** rather than distributing randomly. The cold spot, hemispherical asymmetry, and large-scale alignment anomalies should show geometric relationships consistent with boundary conditions rather than statistical fluctuation.
 
-- **Ultra-high energy cosmic rays** exceeding the GZK limit should arrive preferentially from boundary directions and carry energy profiles inconsistent with interior travel. Under the Rip hypothesis these are parent universe photons arriving blueshifted by horizon crossing.
+- **Ultra-high energy cosmic rays** exceeding the GZK limit should arrive preferentially from boundary directions and carry energy profiles inconsistent with interior travel. Two non-exclusive Rip mechanisms could produce them: parent universe photons arriving blueshifted by horizon crossing; and parent-side infall matter that approached but did not cross a Rip threshold, retaining the kinetic energy of that infall and emerging into our universe at extreme velocity with no local accelerator to account for it. The second mechanism predicts massive particles, not only photons, originating near Rip boundaries — a spectral and compositional signature distinguishable from interior-accelerated cosmic rays.
 
 - **Matter density at the cosmological horizon** should be slightly elevated above what interior models predict, reflecting ongoing matter arrival from the parent universe.
 

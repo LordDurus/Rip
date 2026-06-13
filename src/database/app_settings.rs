@@ -120,6 +120,9 @@ pub struct AppSettings {
     pub smbh_formation_probability: f64,
     /// Decay timescale (in timesteps) for SMBH formation probability; smaller = more strongly early-biased.
     pub smbh_early_bias: f64,
+    /// Initial matter density assigned to an SMBH on formation, representing rapid early feeding from the host. Should dominate local density to drive gravitational growth.
+    pub smbh_initial_density: f64,
+    pub smbh_accretion_rate: f64,
 }
 
 impl AppSettings {
@@ -267,6 +270,8 @@ impl AppSettings {
             smbh_curvature_threshold: get_f64("SMBH_CURVATURE_THRESHOLD"),
             smbh_formation_probability: get_f64("SMBH_FORMATION_PROBABILITY"),
             smbh_early_bias: get_f64("SMBH_EARLY_BIAS"),
+            smbh_initial_density: get_f64("SMBH_INITIAL_DENSITY"),
+            smbh_accretion_rate: get_f64("SMBH_ACCRETION_RATE"),
         }
     }
 

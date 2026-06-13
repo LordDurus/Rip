@@ -6,10 +6,10 @@ use crate::database::entities::structure_particle::StructureParticle;
 use crate::enums::log_level::LogLevel;
 use crate::enums::rip_decay_mechanism::RipDecayMechanism;
 use crate::gravity::compute_gravity_fft;
+use crate::helpers::populate_grid::populate_grid;
 use crate::helpers::rip::compute_cell_rip_strength;
 use crate::helpers::transport::apply_matter_transport;
 use crate::initial_geometry::InitialGeometry;
-use crate::populate_grid::populate_grid;
 use colored::Colorize;
 use crossterm::event::{self, Event, KeyCode, KeyEvent};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
@@ -268,7 +268,21 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
 
                         // Black hole formation — set_as_black_hole marks dirty internally
                         if !cell.is_black_hole {
-                            if cell.curvature > app_settings.curvature_threshold && cell.matter_density > app_settings.collapse_density_threshold {
+                            // SMBH formation — rare high-curvature seeds with early-time bias.
+                            // Checked first: an SMBH seed should not be "claimed" by the
+                            // ordinary collapse path before it gets the chance to form.
+                            // Probability decays exponentially with timestep so early
+                            // formation is favored (the JWST overmassive-early-BH regime).
+                            let smbh_probability = app_settings.smbh_formation_probability * f64::exp(-(timestep as f64) / app_settings.smbh_early_bias);
+                            let mut rng = rand::thread_rng();
+                            if cell.curvature > app_settings.smbh_curvature_threshold && rng.gen_range(0.0..1.0) < smbh_probability {
+                                set_as_black_hole(cell, &next_black_hole_id);
+                                cell.is_supermassive = true;
+                                cell.is_rip_induced = false;
+                                // Form already-massive: rapid early feeding from the host.
+                                // Ensures the SMBH dominates local gravity and grows from there.
+                                cell.matter_density = cell.matter_density.max(app_settings.smbh_initial_density);
+                            } else if cell.curvature > app_settings.curvature_threshold && cell.matter_density > app_settings.collapse_density_threshold {
                                 set_as_black_hole(cell, &next_black_hole_id);
                                 cell.is_rip_induced = false;
                             } else if cell.rip_strength > app_settings.rip_induced_threshold {
@@ -316,16 +330,27 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                 col.iter_mut().for_each(|row| {
                     row.iter_mut().for_each(|cell| {
                         if cell.is_black_hole {
-                            // black hole: drain (the clock), then relax once it's dropped below threshold
-                            cell.matter_density = (cell.matter_density - app_settings.bh_drain_rate * cell.matter_density).max(0.0);
-
-                            let below = if cell.is_rip_induced {
-                                cell.rip_strength < app_settings.rip_induced_threshold * 0.5
+                            if cell.is_supermassive {
+                                // Active feeding: the SMBH accretes from its deep well faster than it drains.
+                                // Net positive while there is matter in the neighborhood to pull.
+                                cell.matter_density += app_settings.smbh_accretion_rate * cell.matter_density;
+                                // still subject to drain, but accretion dominates
+                                cell.matter_density = (cell.matter_density - app_settings.bh_drain_rate * cell.matter_density).max(0.0);
+                                // no reversal check — persistence is a *consequence* of net positive growth,
+                                // not an exemption
                             } else {
-                                cell.matter_density < app_settings.collapse_density_threshold * 0.5
-                            };
-                            if below {
-                                revert_black_hole(cell);
+                                // normal BH: drain only (the clock), then revert below threshold
+                                // let drain = app_settings.rip_drain_rate * cell.rip_strength * cell.matter_density;
+                                // cell.matter_density = (cell.matter_density - drain).max(0.0);
+                                cell.matter_density = (cell.matter_density - app_settings.bh_drain_rate * cell.matter_density).max(0.0);
+                                let below = if cell.is_rip_induced {
+                                    cell.rip_strength < app_settings.rip_induced_threshold * 0.5
+                                } else {
+                                    cell.matter_density < app_settings.collapse_density_threshold * 0.5
+                                };
+                                if below {
+                                    revert_black_hole(cell);
+                                }
                             }
                         } else {
                             let drain = app_settings.rip_drain_rate * cell.rip_strength * cell.matter_density;
