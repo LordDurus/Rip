@@ -30,13 +30,13 @@ def find_inflation_end(conn, run_id):
     growth rate d(ln a)/dt was still meaningfully above zero.
     """
     df = pd.read_sql_query(
-        "SELECT timestep, time_myr, scale_factor_avg FROM timestep_summary WHERE run_id = ? ORDER BY timestep",
+        "SELECT timestep, time_myr, scale_factor FROM timestep_summary WHERE run_id = ? ORDER BY timestep",
         conn, params=(run_id,)
     )
     if df.empty:
         return None
 
-    scale = df["scale_factor_avg"].values
+    scale = df["scale_factor"].values
     time = df["time_myr"].values
     ln_a = np.log(scale)
     growth = np.gradient(ln_a, time)

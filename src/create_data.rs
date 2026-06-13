@@ -401,7 +401,8 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
             }
 
             db.save_all_cells(run.run_id, &mut grid).expect("Error saving cells");
-            db.record_timestep_summary(timestep, 100.0, &grid, run.run_id).expect("failed to record rip field summary");
+            db.record_timestep_summary(timestep, 100.0, &grid, run.run_id, scale_factor, current_total_matter)
+                .expect("failed to record rip field summary");
         }
 
         let count = grid.iter().flat_map(|col| col.iter()).flat_map(|row| row.iter()).filter(|cell| cell.is_black_hole).count();

@@ -113,7 +113,7 @@ Black holes can now relax back into ordinary cells once they drain below half th
 
 ## Notes on This Run
 
-- Two correctness fixes preceded this run: a copy-paste bug that doubled `scale_factor_avg`/`rip_strength_avg` in the timestep summary, and the removal of the `max(1.0)` floor on the scale factor (which had been hiding the early contraction).
+- Two correctness fixes preceded this run: a copy-paste bug that doubled `scale_factor`/`rip_strength_avg` in the timestep summary, and the removal of the `max(1.0)` floor on the scale factor (which had been hiding the early contraction).
 - The `1e30` black-hole sentinel for `matter_density` was removed; black hole cells now carry their real matter, which is what makes reversal accounting and a clean gravity FFT possible.
 
 ---

@@ -17,7 +17,7 @@ pub trait DbProvider {
 
     fn insert_particle_batch(&mut self, particles: &[StructureParticle]) -> Result<()>;
     fn save_all_cells(&mut self, run_id: i64, grid: &mut Vec<Vec<Vec<Cell>>>) -> Result<()>;
-    fn record_timestep_summary(&mut self, timestep: usize, step_duration_myr: f64, grid: &Vec<Vec<Vec<Cell>>>, run_id: i64) -> Result<()>;
+    fn record_timestep_summary(&mut self, timestep: usize, step_duration_myr: f64, grid: &Vec<Vec<Vec<Cell>>>, run_id: i64, scale_factor: f64, total_matter: f64) -> Result<()>;
     fn get_or_insert_cell_position(&mut self, column: usize, row: usize) -> CellPosition;
     fn log_message(&mut self, run_id: i64, module: &str, level: LogLevel, message: &str) -> rusqlite::Result<()>;
 

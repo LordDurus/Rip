@@ -224,13 +224,13 @@ is rising (matter re-injected) — reversal driving the contraction.
 SELECT a.timestep,
        a.black_hole_count,
        a.total_matter,
-       a.scale_factor_avg,
-       a.scale_factor_avg - p.scale_factor_avg AS delta_a
+       a.scale_factor,
+       a.scale_factor - p.scale_factor AS delta_a
 FROM timestep_summary a
 JOIN timestep_summary p
   ON p.run_id = a.run_id AND p.timestep = a.timestep - 1
 WHERE a.run_id = 1
-  AND a.scale_factor_avg < p.scale_factor_avg
+  AND a.scale_factor < p.scale_factor
 ORDER BY a.timestep;
 ```
 ```
@@ -246,7 +246,7 @@ SELECT
   (SELECT total_matter FROM timestep_summary WHERE run_id=1 ORDER BY timestep ASC  LIMIT 1)        AS matter_first,
   (SELECT total_matter FROM timestep_summary WHERE run_id=1 ORDER BY timestep DESC LIMIT 1)        AS matter_last,
   (SELECT black_hole_count FROM timestep_summary WHERE run_id=1 ORDER BY timestep DESC LIMIT 1)    AS bh_last,
-  (SELECT scale_factor_avg FROM timestep_summary WHERE run_id=1 ORDER BY timestep DESC LIMIT 1)    AS a_last;
+  (SELECT scale_factor FROM timestep_summary WHERE run_id=1 ORDER BY timestep DESC LIMIT 1)    AS a_last;
 ```
 ```
 (paste result here)
