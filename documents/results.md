@@ -86,7 +86,7 @@ The `curvature` and `rip_strength` fields are noise-dominated by contrast: both 
 
 ### 3D Interactive Visualization
 
-**[Open interactive 3D view](structure_3d_run1_t200.html)** — rotate, zoom, and explore the matter density distribution in three dimensions.
+**[Open interactive 3D view](structure_3d_run1_t2000.html)** — rotate, zoom, and explore the matter density distribution in three dimensions.
 
 <img src="images/structure_3d_run1_t2000.png" alt="3D structure at timestep 2000" width="600">
 
