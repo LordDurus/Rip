@@ -1,15 +1,17 @@
 use crate::AppSettings;
-use crate::create_data::f64::consts::PI;
 use crate::database::db_provider::DbProvider;
 use crate::database::entities::cell::Cell;
 use crate::database::entities::structure_particle::StructureParticle;
 use crate::enums::log_level::LogLevel;
 use crate::enums::rip_decay_mechanism::RipDecayMechanism;
+use crate::enums::smbh_connection_mode::SmbhConnectionMode;
 use crate::gravity::compute_gravity_fft;
+use crate::helpers::black_hole::{revert_black_hole, set_as_black_hole};
+use crate::helpers::grid::{populate_grid, seed_initial_curvature};
+use crate::helpers::particle::{apply_gravity_to_particle, initialize_particles, map_particle_to_cell};
 use crate::helpers::rip::compute_cell_rip_strength;
 use crate::helpers::transport::apply_matter_transport;
 use crate::initial_geometry::InitialGeometry;
-use crate::populate_grid::populate_grid;
 use colored::Colorize;
 use crossterm::event::{self, Event, KeyCode, KeyEvent};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
@@ -20,103 +22,6 @@ use std::f64;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-
-fn initialize_particles(positions: &mut Vec<(f64, f64, f64)>, velocities: &mut Vec<(f64, f64, f64)>) {
-    let mut rng = rand::thread_rng();
-    for i in 0..positions.len() {
-        let theta = rng.gen_range(0.0..2.0 * PI);
-        let phi = rng.gen_range(0.0..PI);
-        let r = rng.gen_range(0.8..1.2);
-
-        let x = r * phi.sin() * theta.cos();
-        let y = r * phi.sin() * theta.sin();
-        let z = r * phi.cos();
-
-        let velocity_x = rng.gen_range(-0.05..0.05);
-        let velocity_y = rng.gen_range(-0.05..0.05);
-        let velocity_z = rng.gen_range(-0.05..0.05);
-
-        positions[i] = (x, y, z);
-        velocities[i] = (velocity_x, velocity_y, velocity_z);
-    }
-}
-
-#[inline(always)]
-fn apply_gravity_to_particle(particle: &mut StructureParticle, gravity: (f64, f64, f64), timestep: f64) {
-    particle.velocity_x += gravity.0 * timestep;
-    particle.velocity_y += gravity.1 * timestep;
-    particle.velocity_z += gravity.2 * timestep;
-
-    for coord in [&mut particle.velocity_x, &mut particle.velocity_y, &mut particle.velocity_z] {
-        if !coord.is_finite() {
-            *coord = 0.0;
-        }
-    }
-
-    particle.position_x += particle.velocity_x * timestep;
-    particle.position_y += particle.velocity_y * timestep;
-    particle.position_z += particle.velocity_z * timestep;
-}
-
-#[inline(always)]
-pub fn map_particle_to_cell(x: f64, y: f64, z: f64, grid_width: usize, grid_height: usize, grid_depth: usize) -> Option<(usize, usize, usize)> {
-    if !(x >= -1.0 && x <= 1.0 && y >= -1.0 && y <= 1.0 && z >= -1.0 && z <= 1.0) {
-        return None;
-    }
-
-    let col = ((x + 1.0) / 2.0 * grid_width as f64).floor() as usize;
-    let row = ((y + 1.0) / 2.0 * grid_height as f64).floor() as usize;
-    let layer = ((z + 1.0) / 2.0 * grid_depth as f64).floor() as usize;
-
-    if col < grid_width && row < grid_height && layer < grid_depth {
-        Some((col, row, layer))
-    } else {
-        None
-    }
-}
-
-fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSettings, db: &mut dyn DbProvider) {
-    let progress_bar: ProgressBar = ProgressBar::new((settings.inf_grid_height * settings.inf_grid_width * settings.inf_grid_depth) as u64);
-
-    let mut rng = rand::thread_rng();
-
-    for height in 0..settings.inf_grid_height {
-        for width in 0..settings.inf_grid_width {
-            for depth in 0..settings.inf_grid_depth {
-                let cell = &mut grid[height][width][depth];
-                progress_bar.inc(1);
-                cell.layer = depth;
-                cell.position = db.get_or_insert_cell_position(width, height);
-                cell.curvature = rng.gen_range(0.0..0.1);
-            }
-        }
-    }
-    progress_bar.finish_with_message("Seeding simulation complete.");
-}
-
-fn set_as_black_hole(cell: &mut Cell, next_black_hole_id: &Arc<Mutex<u64>>) {
-    cell.is_black_hole = true;
-    let mut id = next_black_hole_id.lock().unwrap();
-    cell.black_hole_id = Some(*id);
-    *id += 1;
-    drop(id);
-
-    // cell.matter_density = 1.0e30;
-    // cell.dimple_strength = 1.0e30;
-}
-
-/// Relax a black hole back into an ordinary cell once it has drained below the
-/// reversal threshold. Mirror of `set_as_black_hole`.
-fn revert_black_hole(cell: &mut Cell) {
-    cell.is_black_hole = false;
-    cell.black_hole_id = None;
-    cell.is_rip_induced = false;
-    cell.is_supermassive = false;
-    cell.smbh_rip_contribution = false;
-    // Intentionally left alone: matter_density / dimple_strength / curvature.
-    // matter_density now holds the real residual, which re-enters total_matter on
-    // this flip — that's your contraction kick. mass recomputes from it next step.
-}
 
 struct RawModeGuard;
 impl Drop for RawModeGuard {
@@ -215,6 +120,10 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
         let progress_bar = Arc::new(ProgressBar::new(app_settings.num_timesteps as u64));
         println!("Starting Timesteps...");
 
+        // Built once: which mode assigns per-SMBH parent-connection strength.
+        let smbh_connection_mode = SmbhConnectionMode::from_settings(&app_settings);
+        let smbh_connection_alpha = app_settings.smbh_connection_alpha;
+
         for timestep in 0..app_settings.num_timesteps {
             if !running.load(Ordering::SeqCst) {
                 println!("Stopped at timestep {}", timestep);
@@ -268,7 +177,31 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
 
                         // Black hole formation — set_as_black_hole marks dirty internally
                         if !cell.is_black_hole {
-                            if cell.curvature > app_settings.curvature_threshold && cell.matter_density > app_settings.collapse_density_threshold {
+                            // SMBH formation — rare high-curvature seeds with early-time bias.
+                            // Checked first: an SMBH seed should not be "claimed" by the
+                            // ordinary collapse path before it gets the chance to form.
+                            // Probability decays exponentially with timestep so early
+                            // formation is favored (the JWST overmassive-early-BH regime).
+                            let smbh_probability = app_settings.smbh_formation_probability * f64::exp(-(timestep as f64) / app_settings.smbh_early_bias);
+                            let mut rng = rand::thread_rng();
+                            if cell.curvature > app_settings.smbh_curvature_threshold && rng.gen_range(0.0..1.0) < smbh_probability {
+                                set_as_black_hole(cell, &next_black_hole_id);
+                                cell.is_supermassive = true;
+                                cell.is_rip_induced = false;
+                                // Form already-massive: rapid early feeding from the host.
+                                // Ensures the SMBH dominates local gravity and grows from there.
+                                cell.matter_density = cell.matter_density.max(app_settings.smbh_initial_density);
+                                // Assign this SMBH's parent-connection feed rate. Heavy-tailed:
+                                // u^alpha crushes most draws toward 0 (stalls) with a rare strong
+                                // tail (runaway). Mode chooses whether the scale is tied to the
+                                // depth of the curvature well or drawn independently.
+                                let u: f64 = rng.gen_range(0.0..1.0);
+                                let heavy_tail = u.powf(smbh_connection_alpha);
+                                cell.smbh_connection_strength = match &smbh_connection_mode {
+                                    SmbhConnectionMode::TiedToCurvature { rate } => rate * (cell.curvature - app_settings.smbh_curvature_threshold) * heavy_tail,
+                                    SmbhConnectionMode::IndependentDraw { rate } => rate * heavy_tail,
+                                };
+                            } else if cell.curvature > app_settings.curvature_threshold && cell.matter_density > app_settings.collapse_density_threshold {
                                 set_as_black_hole(cell, &next_black_hole_id);
                                 cell.is_rip_induced = false;
                             } else if cell.rip_strength > app_settings.rip_induced_threshold {
@@ -316,16 +249,29 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                 col.iter_mut().for_each(|row| {
                     row.iter_mut().for_each(|cell| {
                         if cell.is_black_hole {
-                            // black hole: drain (the clock), then relax once it's dropped below threshold
-                            cell.matter_density = (cell.matter_density - app_settings.bh_drain_rate * cell.matter_density).max(0.0);
-
-                            let below = if cell.is_rip_induced {
-                                cell.rip_strength < app_settings.rip_induced_threshold * 0.5
+                            if cell.is_supermassive {
+                                // Active feeding from the parent geometry at this SMBH's own
+                                // connection strength (heavy-tailed, assigned at formation).
+                                // Most SMBHs have near-zero strength and stall near drain-balance;
+                                // a rare few with strong connections run away to overmassive scale.
+                                cell.matter_density += cell.smbh_connection_strength * cell.matter_density;
+                                // still subject to drain; net growth only when connection > drain
+                                cell.matter_density = (cell.matter_density - app_settings.bh_drain_rate * cell.matter_density).max(0.0);
+                                // no reversal check — persistence is a *consequence* of net positive growth,
+                                // not an exemption
                             } else {
-                                cell.matter_density < app_settings.collapse_density_threshold * 0.5
-                            };
-                            if below {
-                                revert_black_hole(cell);
+                                // normal BH: drain only (the clock), then revert below threshold
+                                // let drain = app_settings.rip_drain_rate * cell.rip_strength * cell.matter_density;
+                                // cell.matter_density = (cell.matter_density - drain).max(0.0);
+                                cell.matter_density = (cell.matter_density - app_settings.bh_drain_rate * cell.matter_density).max(0.0);
+                                let below = if cell.is_rip_induced {
+                                    cell.rip_strength < app_settings.rip_induced_threshold * 0.5
+                                } else {
+                                    cell.matter_density < app_settings.collapse_density_threshold * 0.5
+                                };
+                                if below {
+                                    revert_black_hole(cell);
+                                }
                             }
                         } else {
                             let drain = app_settings.rip_drain_rate * cell.rip_strength * cell.matter_density;

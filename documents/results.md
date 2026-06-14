@@ -8,7 +8,7 @@ A record of notable simulation results, the settings that produced them, and wha
 
 <img src="images/inflation_run1.png" alt="Inflation start/stop" width="600">
 
-**Run:** 1 &nbsp;|&nbsp; **Grid:** 64×64×64 &nbsp;|&nbsp; **Timesteps:** 200
+**Run:** 1 &nbsp;|&nbsp; **Grid:** 64×64×64 &nbsp;|&nbsp; **Timesteps:** 2000
 
 ### What it shows
 
@@ -48,9 +48,9 @@ This is the core hypothesis of the project: matter crossing into rips and black 
 
 ### Matter Density Fluctuations
 
-<img src="images/cmb_power_run1_matter_density_t200.png" alt="CMB-analog matter density power spectrum" width="600">
+<img src="images/cmb_power_run1_matter_density_t0.png" alt="CMB-analog matter density power spectrum" width="600">
 
-**Run:** 1 &nbsp;|&nbsp; **Grid:** 64×64×64 &nbsp;|&nbsp; **Timestep:** 200 &nbsp;|&nbsp; **Field:** matter_density (non-black-hole cells only)
+**Run:** 1 &nbsp;|&nbsp; **Grid:** 64×64×64 &nbsp;|&nbsp; **Timestep:** 2000 &nbsp;|&nbsp; **Field:** matter_density (non-black-hole cells only)
 
 ### What it shows
 
@@ -61,7 +61,7 @@ This is the core hypothesis of the project: matter crossing into rips and black 
 ### Known limitations
 
 - Black hole cells are excluded from the field; col/row positions where all depth layers are black holes contribute no real signal.
-- The slope reflects the Perlin seeding as much as dynamical evolution; matter_density is denser at t=200 than at late times because the rip drain has not yet stripped it.
+- The slope reflects the Perlin seeding as much as dynamical evolution; matter_density is denser at t=2000 than at late times because the rip drain has not yet stripped it.
 - The `matter_density` field is not mass-conserving — accretion adds matter locally without transferring it from neighbors.
 
 ### Curvature and Rip Strength
@@ -74,23 +74,23 @@ The `curvature` and `rip_strength` fields are noise-dominated by contrast: both 
 
 ### 2D Matter Density Map
 
-<img src="images/structure_run1_t200.png" alt="Large-scale structure at timestep 200" width="600">
+<img src="images/structure_run1_t2000.png" alt="Large-scale structure at timestep 2000" width="600">
 
-**Run:** 1 &nbsp;|&nbsp; **Grid:** 64×64×64 &nbsp;|&nbsp; **Timestep:** 200 &nbsp;|&nbsp; **Field:** matter_density (non-BH cells only)
+**Run:** 1 &nbsp;|&nbsp; **Grid:** 64×64×64 &nbsp;|&nbsp; **Timestep:** 2000 &nbsp;|&nbsp; **Field:** matter_density (non-BH cells only)
 
 ### What it shows
 
 **Left panel — Matter Density Projection:** The maximum matter density along the depth axis projected onto a 2D map. Overdense regions (yellow/orange) are separated by underdense voids (dark), with distinct dense nodes and filament-like connections between them. The structure is gravitational accretion acting on the Perlin initial conditions.
 
-**Right panel — Density Distribution:** The histogram at t=200 with filament (top 30%, ~0.128) and void (bottom 30%, ~0.087) thresholds marked. The distribution is unimodal — a consequence of the roughly uniform drain acting on all cells. Real cosmic structure would show a more bimodal distribution as gravity amplifies overdensities over longer timescales.
+**Right panel — Density Distribution:** The histogram at t=2000 with filament (top 30%, ~0.128) and void (bottom 30%, ~0.087) thresholds marked. The distribution is unimodal — a consequence of the roughly uniform drain acting on all cells. Real cosmic structure would show a more bimodal distribution as gravity amplifies overdensities over longer timescales.
 
 ### 3D Interactive Visualization
 
-**[Open interactive 3D view](structure_3d_run1_t200.html)** — rotate, zoom, and explore the matter density distribution in three dimensions.
+**[Open interactive 3D view](structure_3d_run1_t2000.html)** — rotate, zoom, and explore the matter density distribution in three dimensions.
 
-<img src="images/structure_3d_run1_t200.png" alt="3D structure at timestep 200" width="600">
+<img src="images/structure_3d_run1_t2000.png" alt="3D structure at timestep 2000" width="600">
 
-**Run:** 1 &nbsp;|&nbsp; **Grid:** 64×64×64 &nbsp;|&nbsp; **Timestep:** 200 &nbsp;|&nbsp; **Density percentile:** top 5%
+**Run:** 1 &nbsp;|&nbsp; **Grid:** 64×64×64 &nbsp;|&nbsp; **Timestep:** 2000 &nbsp;|&nbsp; **Density percentile:** top 5%
 
 ### What it shows
 
@@ -107,7 +107,7 @@ High-density matter cells (colored by density, Plasma colorscale) rendered in 3D
 
 Black holes can now relax back into ordinary cells once they drain below half their formation threshold (with hysteresis), the counterpart to formation. A dedicated `bh_drain_rate` acts as the clock that sets black-hole lifetime; on reversal the residual matter re-enters `total_matter`, which is intended to register as a contraction. The goal is to turn the single early contraction into a train of contract/expand cycles, with the matter budget shrinking each cycle.
 
-**Status:** The current inflation curve (Run 1, 200 timesteps) does **not** yet show clear multi-cycle oscillation — only the single opening dip, with one small kink in the growth rate near 6,500 Myr. Whether reversal is firing but desynchronized, or not firing at all, is being verified directly from the `black_hole_count` time series in `timestep_summary` (a count that rises *and falls* confirms reversal). This section will be completed once that is confirmed.
+**Status:** The current inflation curve (Run 1, 2000 timesteps) does **not** yet show clear multi-cycle oscillation — only the single opening dip, with one small kink in the growth rate near 6,500 Myr. Whether reversal is firing but desynchronized, or not firing at all, is being verified directly from the `black_hole_count` time series in `timestep_summary` (a count that rises *and falls* confirms reversal). This section will be completed once that is confirmed.
 
 ---
 
@@ -174,7 +174,7 @@ A direct plot of `total_matter` (non-BH cells only, left axis) against `scale_fa
 
 Key features:
 
-- **Early spike (t < 200):** The initial BH formation wave drives a sharp drop in total matter and a corresponding fast rise in scale factor — the bulk of the expansion happens here.
+- **Early spike (t < 2000):** The initial BH formation wave drives a sharp drop in total matter and a corresponding fast rise in scale factor — the bulk of the expansion happens here.
 - **Matched deceleration:** Both curves flatten at the same rate after ~t=1000, consistent with expansion being driven by the *rate* of matter loss — as d(matter)/dt slows, so does d(a)/dt.
 - **Clean anti-correlation throughout:** The relationship holds across all 5000 timesteps without divergence or anomaly.
 
@@ -187,3 +187,43 @@ This result justifies proceeding to Phase 2: rewiring `compute_scale_factor` to 
 ### Next step
 
 Phase 2 — rewire `compute_scale_factor` to derive expansion rate from `−d(total_matter)/dt` computed from `timestep_summary`, making the matter-loss-drives-expansion mechanism explicit rather than implicit.
+---
+
+## Supermassive Black Holes: Heavy-Tailed Overmassive Population from Threshold-Crossing
+
+<img src="images/smbh_run1_t4999.png" alt="SMBH mass distribution and connection-strength relationship" width="700">
+
+**Run:** 1 &nbsp;|&nbsp; **Grid:** 64×64×64 &nbsp;|&nbsp; **Timesteps:** 5000 &nbsp;|&nbsp; **Mode:** `tied_to_curvature`
+
+### What it shows
+
+This targets the JWST anomaly of overmassive early black holes — black-hole-to-stellar-mass ratios of 10–30% at high redshift versus ~0.1–0.5% locally — where instantaneous threshold-crossing collapse has a natural edge over slow accretion. SMBHs form from rare high-curvature seeds that cross a higher threshold than ordinary black holes (`smbh_curvature_threshold`), with formation probability biased toward early timesteps (`exp(−t / smbh_early_bias)`). Once formed, each SMBH feeds from the parent geometry at its own **connection strength**, drawn heavy-tailed at formation: most SMBHs get a near-zero feed and stall near drain-balance; a rare few get a strong connection and run away to overmassive scale. Persistence is a consequence of net-positive growth (connection exceeding `bh_drain_rate`), not an imposed exemption from reversal.
+
+**Left panel — mass distribution:** A textbook heavy tail. A large spike of stalled SMBHs sits near the formation floor, with a long declining tail stretching across many orders of magnitude to the runaway giants. The population is overwhelmingly small holes with a rare overmassive minority — qualitatively the JWST regime, where most black holes are unremarkable and a few are anomalously large for their epoch.
+
+**Right panel — connection strength versus mass, colored by formation curvature:** A sharp threshold at the drain rate (~10⁻²): below it every SMBH is stalled flat along the mass floor, above it mass climbs near-vertically. The runaway points are uniformly high-curvature (bright), while the stalled floor is mixed — the visual signature of the curvature-mass correlation that the `tied_to_curvature` mode produces.
+
+### The two connection modes are empirically distinguishable
+
+The connection-strength assignment is a pluggable mode (`SmbhConnectionMode`), allowing the curvature-tied and independent hypotheses to be compared directly. Splitting SMBHs into runaway (mass > 1000) and stalled groups and comparing their formation curvature:
+
+| Mode | Runaway curvature | Stalled curvature | Correlation |
+|------|-------------------|-------------------|-------------|
+| `tied_to_curvature`  | 0.0989 | 0.0974 | present |
+| `independent_draw`   | 0.0975 | 0.0975 | absent |
+
+In the curvature-tied mode the SMBHs that ran away are those that formed in deeper curvature wells; in the independent mode the giants and the stalled holes are drawn from the same curvature distribution. Both modes produce the same heavy-tailed overmassive population, so the JWST anomaly itself does not distinguish them — but the curvature-mass correlation does.
+
+### Why it matters
+
+The mechanism reproduces the qualitative JWST signature without slow accretion: instantaneous threshold-crossing plus a rare strong parent-geometry feed produces overmassive holes early and fast. More usefully, the mode comparison yields a **falsifiable observational test**: under the rip hypothesis with curvature-tied connection, observed SMBH masses should correlate with the curvature of their formation environment; under independent connection, they should not. This is checkable in principle against the relationship between SMBH mass and host-galaxy/halo properties.
+
+### Known limitations
+
+- **Unbounded growth.** With connection strength exceeding the drain rate, runaway SMBH mass grows geometrically each step (`(1 + connection − drain) × density`), reaching unphysical magnitudes over 5000 steps. The *distribution shape* is the result here, not the absolute mass values; a physical cap or a finite, drawn-down supply is needed before the absolute scale is meaningful. This is the same conservation question recorded in `decisions.md` — the parent-inflow term creates matter from nothing within the single modeled geometry.
+- **Population count.** ~12,800 SMBHs form, far more than the one-per-galaxy of reality. Because growth is now decoupled from formation (most seeds stall), the effective population is a handful of giants among many stalled small holes, but the raw seed count is still high. Tying formation (not just growth) to a rarer condition — or to the future galaxy structures — would bring the count toward realism.
+- **No feedback to structure.** As with the inflation result, SMBH mass does not yet feed back into the gravity field or dilute surrounding densities.
+
+### Next step
+
+The galaxy branch: model galaxy-scale overdensity regions, place SMBHs at their centers, and tie the parent-connection strength (and ideally formation itself) to host properties. That would convert the high seed count into a realistic one-SMBH-per-galaxy population and open the SMBH↔galaxy rip-feedback question.

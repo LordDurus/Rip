@@ -189,3 +189,73 @@ negligible observable difference at current simulation scales.
 **Early candidate:** The JWST supermassive black hole anomaly sits close to this boundary — quantum-scale rapid collapse producing objects that then dominated large-scale structure. Already on the roadmap and already probing the right regime.
 
 **Gate:** Requires the parameter sweep tool to be built and the core simulation to be reproducing cosmological behavior reliably. Revisit after the sweep tool is operational and the JWST branch produces results.
+
+---
+
+## Ultra-high-energy cosmic rays as parent-geometry infall leakage
+
+**The idea.** Matter falling toward a black hole in the *parent* geometry that does not quite
+cross the threshold — near-misses — retains the kinetic energy of that infall. Where the boundary
+connects to our universe, such matter could emerge already moving at extreme velocity, with no
+local accelerator to account for it. This is a candidate explanation for ultra-high-energy cosmic
+rays (the "oh-my-god particle" class) whose energies are difficult to produce with known local
+astrophysical accelerators.
+
+**Why it is distinct from SMBH feeding.** The persistence-feeding term (see decisions.md, SMBH
+two-sided accounting) is diffuse, bulk, low-velocity matter *entering* the SMBH cell. The cosmic
+ray mechanism is the opposite in two ways: it is rare, particle-scale, high-velocity, and it is
+matter *leaving* the boundary into neighboring cells. The two may even be in tension (net in vs.
+net out), so they must be modeled as separate phenomena, not the same term.
+
+**Why it is parked.** The current grid tracks matter *density* per cell, not particle momentum,
+so there is no representation for "high-velocity ejecta with residual infall energy." Modeling
+this needs a velocity/momentum carrier. The `structure_particle` table already has velocity_x/y/z
+fields, which is the natural eventual home — cosmic-ray events could be spawned as structure
+particles emitted from SMBH cells with velocities seeded from a parent-infall energy distribution.
+
+**Falsifiable content.** If implemented, the prediction would be a population of high-velocity
+particles originating at SMBH locations, with an energy spectrum set by parent-side infall rather
+than local acceleration — testable in shape against the observed UHECR spectrum and against the
+spatial correlation of UHECR arrival directions with massive black holes.
+
+**Status.** Idea only. Needs the momentum representation before any implementation. Connects to the
+parked dark-matter-as-rip-processed-matter idea (both are "matter that has interacted with a rip
+and carries a signature of it").
+
+---
+
+## Stars as near-threshold transients in the pre-collapse band
+
+**The idea.** Between "ordinary cell" and "black hole" there is a density/curvature band where a
+gravity well is deep enough to ignite fusion but not yet deep enough to cross the collapse
+threshold. Cells in this band are stars. Because the band sits just below collapse, star formation
+is a natural by-product of the same gradient that produces black holes — the matter that is on its
+way to becoming a black hole but has not arrived yet.
+
+**Why it is a transient ("flash to life").** A star is not a stable end-state in this picture. An
+ignited cell either:
+1. continues to accrete, crosses the collapse threshold, and becomes a black hole; or
+2. burns its matter (fusion → radiation → matter leaving the cell), drops back below the ignition
+   band, and goes dark (burnout).
+
+This fork makes stars a temporary population, which fits the simulation's existing transient-driven
+character (formation waves, reversal waves). It reuses the accretion-vs-drain competition already
+built for SMBHs — only the outcome at the boundary differs.
+
+**Connection to existing results.** Early universe → many cells crossing the gradient quickly → a
+burst of star formation coincident with the early black-hole formation wave. This loosely matches
+the observed early rapid star formation alongside early black holes, and pairs naturally with the
+SMBH branch (overmassive early holes) and the planned galaxy branch (galaxies are made of stars).
+
+**What needs pinning down before implementation.**
+- **Ignition band definition:** likely a density window,
+  `collapse_density_threshold * lower_fraction < density < collapse_density_threshold`, i.e. a new
+  pair of thresholds (or one fraction parameter).
+- **Lifetime/burn mechanism:** an ignited cell loses density over time (matter leaving as
+  radiation), pushing it toward burnout unless accretion wins and tips it into collapse.
+- **Observable / falsifiable content:** star count over time. Prediction: peaks early and correlates
+  with the black-hole formation wave. Testable in shape against the run's BH formation timeseries
+  and, more loosely, against observed cosmic star-formation history.
+
+**Status.** Idea only. Sequenced after SMBHs; pairs with the galaxy branch. Low modeling cost — it
+reuses existing thresholds and the accretion/drain loop, adding an ignition band and a burn term.
