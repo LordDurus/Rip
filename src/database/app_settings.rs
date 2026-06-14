@@ -122,7 +122,15 @@ pub struct AppSettings {
     pub smbh_early_bias: f64,
     /// Initial matter density assigned to an SMBH on formation, representing rapid early feeding from the host. Should dominate local density to drive gravitational growth.
     pub smbh_initial_density: f64,
+    /// Rate at which SMBHs accrete matter from their cell each timestep, added to the SMBH's density and subtracted from the cell's normal matter density.
     pub smbh_accretion_rate: f64,
+    /// SMBH parent-connection mode: "tied_to_curvature" or "independent_draw".
+    pub smbh_connection_mode: String,
+    /// Feed-rate scale for the curvature-tied connection mode.
+    pub smbh_connection_curvature_rate: f64,
+    /// Feed-rate scale for the independent-draw connection mode.
+    pub smbh_connection_independent_rate: f64,
+    pub smbh_connection_alpha: f64,
 }
 
 impl AppSettings {
@@ -272,6 +280,10 @@ impl AppSettings {
             smbh_early_bias: get_f64("SMBH_EARLY_BIAS"),
             smbh_initial_density: get_f64("SMBH_INITIAL_DENSITY"),
             smbh_accretion_rate: get_f64("SMBH_ACCRETION_RATE"),
+            smbh_connection_mode: get_string("SMBH_CONNECTION_MODE"),
+            smbh_connection_curvature_rate: get_f64("SMBH_CONNECTION_CURVATURE_RATE"),
+            smbh_connection_independent_rate: get_f64("SMBH_CONNECTION_INDEPENDENT_RATE"),
+            smbh_connection_alpha: get_f64("SMBH_CONNECTION_ALPHA"),
         }
     }
 

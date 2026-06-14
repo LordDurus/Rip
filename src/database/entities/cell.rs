@@ -43,6 +43,10 @@ pub struct Cell {
     pub is_rip_induced: bool,
     /// Physical volume of the cell in simulated space
     pub volume: f64,
+    /// Per-SMBH parent-connection feed rate, assigned at formation from the heavy-tailed
+    /// draw. Most SMBHs get a near-zero value (they stall); a rare few get a strong
+    /// connection and run away to overmassive scale. Zero for non-SMBH cells.
+    pub smbh_connection_strength: f64,
 }
 
 impl Cell {
@@ -68,6 +72,7 @@ impl Cell {
             smbh_rip_contribution: false,
             volume: 1.0,
             is_rip_induced: false,
+            smbh_connection_strength: 0.0,
         }
     }
 }

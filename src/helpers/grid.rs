@@ -1,6 +1,8 @@
+use crate::AppSettings;
 use crate::database::db_provider::DbProvider;
 use crate::database::entities::cell::Cell;
 use crate::initial_geometry::InitialGeometry;
+use indicatif::ProgressBar;
 use rand::Rng;
 
 pub fn populate_grid(
@@ -25,7 +27,12 @@ pub fn populate_grid(
             }
         }
 
-        InitialGeometry::GaussianBlobs { count, peak_density, sigma_min, sigma_max } => {
+        InitialGeometry::GaussianBlobs {
+            count,
+            peak_density,
+            sigma_min,
+            sigma_max,
+        } => {
             // Pick N random centers + sigmas, then add gaussian contributions per cell
             let blobs: Vec<(f64, f64, f64, f64)> = (0..*count)
                 .map(|_| {
@@ -96,4 +103,23 @@ pub fn populate_grid(
     }
 
     Ok(())
+}
+
+pub fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSettings, db: &mut dyn DbProvider) {
+    let progress_bar: ProgressBar = ProgressBar::new((settings.inf_grid_height * settings.inf_grid_width * settings.inf_grid_depth) as u64);
+
+    let mut rng = rand::thread_rng();
+
+    for height in 0..settings.inf_grid_height {
+        for width in 0..settings.inf_grid_width {
+            for depth in 0..settings.inf_grid_depth {
+                let cell = &mut grid[height][width][depth];
+                progress_bar.inc(1);
+                cell.layer = depth;
+                cell.position = db.get_or_insert_cell_position(width, height);
+                cell.curvature = rng.gen_range(0.0..0.1);
+            }
+        }
+    }
+    progress_bar.finish_with_message("Seeding simulation complete.");
 }
