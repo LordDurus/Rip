@@ -9,4 +9,5 @@ pub struct StructureParticle {
     pub velocity_x: f64,
     pub velocity_y: f64,
     pub velocity_z: f64,
+    pub run_id: i64,
 }

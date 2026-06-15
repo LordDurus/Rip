@@ -1,4 +1,4 @@
-use crate::database::app_settings::AppSettings;
+use crate::database::app_settings::AppSetting;
 use crate::database::entities::cell::Cell;
 use crate::enums::rip_decay_mechanism::RipDecayMechanism;
 
@@ -31,7 +31,7 @@ pub fn compute_rip_decay(mechanism: &RipDecayMechanism, cell: &Cell, current_rip
 }
 
 #[inline(always)]
-pub fn compute_cell_rip_strength(timestep: usize, cell: &Cell, settings: &AppSettings, decay_mechanism: &RipDecayMechanism, step_duration: f64) -> f64 {
+pub fn compute_cell_rip_strength(timestep: usize, cell: &Cell, settings: &AppSetting, decay_mechanism: &RipDecayMechanism, step_duration: f64) -> f64 {
     if cell.is_black_hole {
         return 0.0; // or some sentinel; black holes don't follow this formula
     }

@@ -1,4 +1,4 @@
-use crate::database::app_settings::AppSettings;
+use crate::database::app_settings::AppSetting;
 use crate::database::entities::cell::Cell;
 use rayon::prelude::*;
 
@@ -12,7 +12,7 @@ use rayon::prelude::*;
 /// This is the conservative replacement for the old in-place `accretion` term:
 /// matter moves *between* cells along the gravity direction rather than being
 /// grown out of nothing.
-pub fn apply_matter_transport(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSettings, step_duration: f64) {
+pub fn apply_matter_transport(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSetting, step_duration: f64) {
     let _ = step_duration; // direction-normalized form doesn't need dt; kept for signature symmetry
     let (h_dim, w_dim, d_dim) = (settings.inf_grid_height, settings.inf_grid_width, settings.inf_grid_depth);
     const CFL: f64 = 0.25; // hard ceiling: never move more than this fraction of a cell per step

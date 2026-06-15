@@ -14,7 +14,7 @@ pub enum AppValue {
 #[allow(dead_code)]
 #[derive(Debug, Serialize)]
 /// Holds configuration settings for the cosmological simulation.
-pub struct AppSettings {
+pub struct AppSetting {
     /// Gravitational constant used in force calculations.
     pub gravity: f64,
     /// Speed of light constant.    
@@ -130,10 +130,46 @@ pub struct AppSettings {
     pub smbh_connection_curvature_rate: f64,
     /// Feed-rate scale for the independent-draw connection mode.
     pub smbh_connection_independent_rate: f64,
+    /// Alpha parameter for the heavy-tailed distribution used in the independent-draw SMBH connection mode; smaller values produce a more extreme heavy tail, increasing the rarity of strong connections that lead to runaway SMBH growth.
     pub smbh_connection_alpha: f64,
+    /// Minimum matter density for a cell to become a star.
+    /// Must be below collapse_density_threshold (BH formation takes priority).
+    pub star_formation_threshold: f64,
+    /// Density below which a star ceases to be a star (drops back to diffuse gas).
+    /// Should be less than star_formation_threshold to provide hysteresis and
+    /// prevent rapid formation/extinction flickering.
+    pub star_extinction_threshold: f64,
+    /// Fractional matter loss per timestep due to stellar burning.
+    /// Applied as: matter_density *= (1.0 - star_burn_rate)
+    /// Burned matter stays in the cell as diffuse gas — does not leave the grid,
+    /// so galaxy matter budget is unchanged.
+    pub star_burn_rate: f64,
+    /// Number of galaxy regions to stamp into the grid at initialisation.
+    pub galaxy_count: usize,
+    /// Influence radius of each galaxy region, in cells.
+    pub galaxy_radius: f64,
+    /// Multiplicative matter-density boost applied to cells inside a galaxy region.
+    /// e.g. 3.0 → cells inside start with 3× the base geometry density.
+    pub galaxy_overdensity: f64,
+    /// Additive curvature bonus applied to cells inside a galaxy region at seed time.
+    /// Raises the local curvature floor so SMBH formation threshold is reachable there.
+    pub galaxy_curvature_boost: f64,
+    /// Matter density a cell must reach for a new galaxy to form.
+    pub galaxy_formation_density_threshold: f64,
+    /// Matter density threshold for a cell to be absorbed into an existing galaxy.
+    /// Lower than galaxy_formation_density_threshold.
+    pub galaxy_capture_density_threshold: f64,
+    /// Fractional radius increase per unit of galaxy total_mass per timestep.
+    /// new_radius = old_radius + total_mass * galaxy_mass_growth_rate
+    pub galaxy_mass_growth_rate: f64,
+    /// Maximum fraction of galaxy total_mass a single SMBH can hold.
+    /// e.g. 0.1 → SMBH capped at 10% of host galaxy mass.
+    pub galaxy_smbh_mass_fraction_cap: f64,
+    /// Fraction of (r_i + r_j) within which two galaxies trigger a merger.
+    pub galaxy_merge_overlap_fraction: f64,
 }
 
-impl AppSettings {
+impl AppSetting {
     pub fn load_dynamic(conn: &Connection) -> Result<HashMap<String, AppValue>> {
         let mut stmt = conn.prepare("select ltrim(rtrim(key)) as key, ltrim(trim(value)) as value, ltrim(rtrim(datatype)) as datatype from app_setting")?;
 
@@ -226,7 +262,7 @@ impl AppSettings {
             }
         };
 
-        AppSettings {
+        AppSetting {
             transport_rate: get_f64("TRANSPORT_RATE"),
             num_runs: get_usize("NUM_RUNS"),
             num_cores: get_u32("NUM_CORES"),
@@ -284,11 +320,23 @@ impl AppSettings {
             smbh_connection_curvature_rate: get_f64("SMBH_CONNECTION_CURVATURE_RATE"),
             smbh_connection_independent_rate: get_f64("SMBH_CONNECTION_INDEPENDENT_RATE"),
             smbh_connection_alpha: get_f64("SMBH_CONNECTION_ALPHA"),
+            star_formation_threshold: get_f64("STAR_FORMATION_THRESHOLD"),
+            star_extinction_threshold: get_f64("STAR_EXTINCTION_THRESHOLD"),
+            star_burn_rate: get_f64("STAR_BURN_RATE"),
+            galaxy_count: get_usize("GALAXY_COUNT"),
+            galaxy_radius: get_f64("GALAXY_RADIUS"),
+            galaxy_overdensity: get_f64("GALAXY_OVERDENSITY"),
+            galaxy_curvature_boost: get_f64("GALAXY_CURVATURE_BOOST"),
+            galaxy_formation_density_threshold: get_f64("GALAXY_FORMATION_DENSITY_THRESHOLD"),
+            galaxy_capture_density_threshold: get_f64("GALAXY_CAPTURE_DENSITY_THRESHOLD"),
+            galaxy_mass_growth_rate: get_f64("GALAXY_MASS_GROWTH_RATE"),
+            galaxy_smbh_mass_fraction_cap: get_f64("GALAXY_SMBH_MASS_FRACTION_CAP"),
+            galaxy_merge_overlap_fraction: get_f64("GALAXY_MERGE_OVERLAP_FRACTION"),
         }
     }
 
     pub fn get_settings(conn: &Connection) -> Self {
-        let map = AppSettings::load_dynamic(&conn).expect("Failed to load settings");
-        AppSettings::from_map(&map)
+        let map = AppSetting::load_dynamic(&conn).expect("Failed to load settings");
+        AppSetting::from_map(&map)
     }
 }

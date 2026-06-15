@@ -74,8 +74,8 @@ impl DbProvider for SqliteProvider {
                 "insert into structure_particle (
 										time, rip_strength, scale_factor,
 										position_x, position_y, position_z,
-										velocity_x, velocity_y, velocity_z
-								) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+										velocity_x, velocity_y, velocity_z, run_id
+								) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             )?;
 
             for particle in particles {
@@ -89,6 +89,7 @@ impl DbProvider for SqliteProvider {
                     particle.velocity_x,
                     particle.velocity_y,
                     particle.velocity_z,
+                    particle.run_id,
                 ])?;
             }
         }
@@ -125,6 +126,7 @@ impl DbProvider for SqliteProvider {
         let mut black_hole_count: i64 = 0;
         let mut smbh_count: i64 = 0;
         let mut cell_count = 0;
+        let mut star_count: i64 = 0;
         let mut total_gravity_magnitude = 0.0;
 
         for col in grid {
@@ -142,6 +144,9 @@ impl DbProvider for SqliteProvider {
                     if cell.is_supermassive {
                         smbh_count += 1;
                     }
+                    if cell.is_star {
+                        star_count += 1;
+                    }
 
                     cell_count += 1;
                 }
@@ -154,8 +159,8 @@ impl DbProvider for SqliteProvider {
         let time_myr = timestep as f64 * step_duration_myr;
 
         self.conn.execute(
-            "insert into timestep_summary (timestep, time_myr, rip_strength_avg, scale_factor, run_id, total_matter, black_hole_count, gravity_magnitude_avg, smbh_count)
-				 values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "insert into timestep_summary (timestep, time_myr, rip_strength_avg, scale_factor, run_id, total_matter, black_hole_count, gravity_magnitude_avg, smbh_count, star_count)
+				 values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 timestep as i64,
                 time_myr,
@@ -165,7 +170,8 @@ impl DbProvider for SqliteProvider {
                 total_matter,
                 black_hole_count,
                 avg_gravity_magnitude,
-                smbh_count
+                smbh_count,
+                star_count
             ],
         )?;
 
@@ -226,8 +232,8 @@ impl SqliteProvider {
 						black_hole_id, layer, scale_factor,
 						gravity_x, gravity_y, gravity_z, dimple_strength, is_lensing_candidate,
 						is_supermassive, mass, smbh_rip_contribution, is_rip_induced,
-                        smbh_connection_strength
-				) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+                        smbh_connection_strength, is_star
+				) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
         )?;
         for cell in cells {
             stmt.execute(params![
@@ -251,6 +257,7 @@ impl SqliteProvider {
                 cell.smbh_rip_contribution,       // 18
                 cell.is_rip_induced,              // 19
                 cell.smbh_connection_strength,    // 20
+                cell.is_star as i32,              // 21
             ])?;
         }
         Ok(())

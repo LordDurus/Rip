@@ -24,6 +24,14 @@ The defining challenge for any inflation model is the **graceful exit**: inflati
 
 The early **contraction** is a new feature, revealed once the artificial `max(1.0)` floor on the scale factor was removed. Before the rips activate, accretion briefly wins, matter grows, and the universe contracts ~2%; the bottom of that dip is the physics-driven onset of expansion. Contraction-before-expansion is well-trodden ground in cosmology (bouncing/cyclic models, going back to Tolman 1934), though here it arises from the matter-budget bookkeeping rather than from GR dynamics.
 
+### Epistemic note: this result was not targeted
+
+The inflation-like profile was not an explicit design goal. The simulation was built to model matter crossing geometric thresholds into child geometries. The scale factor was wired to respond to matter loss. The inflation shape — rapid early expansion, smooth deceleration, graceful exit — fell out without tuning for it.
+
+This matters for evaluating the hypothesis. Standard inflation theory was constructed backwards: the inflaton field was invented specifically to produce the flatness, horizon-agreement, and monopole-dilution observations. A mechanism designed to reproduce observations is weak evidence for those observations. Rip's inflation-like curve was unsolicited. It emerges from one rule applied identically across all epochs (matter loss expands spacetime), producing epoch-appropriate behavior — fast early, slow late — without separate physics for each epoch. That unification is a stronger signal than a purpose-built fit would be.
+
+See `decisions.md` — *Emergent inflation-like behavior as epistemic signal* — for the full principle.
+
 ### Known limitations
 
 - The expansion is modest (~1.3×, ~0.26 e-folds) at `MATTER_EXPANSION_RATE = 1e-6` — it is bounded by the available matter budget (`exp(k · M₀)`). A larger rate scales the e-folds up.

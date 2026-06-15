@@ -1,4 +1,4 @@
-use crate::database::app_settings::AppSettings;
+use crate::database::app_settings::AppSetting;
 use crate::database::database_setup::setup_database;
 use crate::database::sqlite_provider::SqliteProvider;
 use crate::helpers::show_settings::show_settings;
@@ -7,13 +7,14 @@ use colored::Colorize;
 mod create_data;
 mod database;
 mod enums;
+mod galaxy;
 mod gravity;
 mod helpers;
 mod initial_geometry;
 
 fn main() {
     let conn = setup_database(true).unwrap();
-    let app_settings = AppSettings::get_settings(&conn);
+    let app_settings = AppSetting::get_settings(&conn);
     let mut db = SqliteProvider { conn };
     show_settings(&app_settings);
 

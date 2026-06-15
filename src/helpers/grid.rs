@@ -1,6 +1,7 @@
-use crate::AppSettings;
+use crate::AppSetting;
 use crate::database::db_provider::DbProvider;
 use crate::database::entities::cell::Cell;
+use crate::galaxy::place_galaxies;
 use crate::initial_geometry::InitialGeometry;
 use indicatif::ProgressBar;
 use rand::Rng;
@@ -102,13 +103,23 @@ pub fn populate_grid(
         }
     }
 
-    Ok(())
+    return Ok(());
 }
 
-pub fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSettings, db: &mut dyn DbProvider) {
+pub fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSetting, db: &mut dyn DbProvider) -> Vec<crate::galaxy::Galaxy> {
     let progress_bar: ProgressBar = ProgressBar::new((settings.inf_grid_height * settings.inf_grid_width * settings.inf_grid_depth) as u64);
-
     let mut rng = rand::thread_rng();
+
+    // Place galaxy regions first so we can boost curvature inside them below.
+    let galaxies = place_galaxies(
+        settings.inf_grid_height,
+        settings.inf_grid_width,
+        settings.inf_grid_depth,
+        settings.galaxy_count,
+        settings.galaxy_radius,
+        settings.galaxy_overdensity, // stored on Galaxy for use by apply_galaxy_overdensity
+        &mut rng,
+    );
 
     for height in 0..settings.inf_grid_height {
         for width in 0..settings.inf_grid_width {
@@ -118,8 +129,35 @@ pub fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSett
                 cell.layer = depth;
                 cell.position = db.get_or_insert_cell_position(width, height);
                 cell.curvature = rng.gen_range(0.0..0.1);
+
+                // Cells inside a galaxy region get a curvature bonus — raises the
+                // local floor so SMBH formation threshold is more reachable there.
+                if galaxies.iter().any(|g| g.contains(height, width, depth)) {
+                    cell.curvature += settings.galaxy_curvature_boost;
+                }
             }
         }
     }
+
     progress_bar.finish_with_message("Seeding simulation complete.");
+    return galaxies;
+}
+
+// ── ADD this new function anywhere in the file after populate_grid: ───────────────────────
+
+/// Apply galaxy overdensity boosts to cells that fall inside a galaxy region.
+/// Called from create_data.rs immediately after populate_grid, as a separate pass
+/// so populate_grid stays single-responsibility (base geometry only).
+pub fn apply_galaxy_overdensity(grid: &mut Vec<Vec<Vec<Cell>>>, galaxies: &[crate::galaxy::Galaxy], settings: &AppSetting) {
+    for height in 0..settings.inf_grid_height {
+        for width in 0..settings.inf_grid_width {
+            for depth in 0..settings.inf_grid_depth {
+                if galaxies.iter().any(|g| g.contains(height, width, depth)) {
+                    // Boost matter density inside galaxy regions.
+                    // Multiplicative so it scales with whatever the base geometry produced.
+                    grid[height][width][depth].matter_density *= galaxies.iter().find(|g| g.contains(height, width, depth)).map(|g| g.overdensity_boost).unwrap_or(1.0);
+                }
+            }
+        }
+    }
 }

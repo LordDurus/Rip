@@ -1,13 +1,14 @@
-use crate::AppSettings;
+use crate::AppSetting;
 use crate::database::db_provider::DbProvider;
 use crate::database::entities::cell::Cell;
 use crate::database::entities::structure_particle::StructureParticle;
 use crate::enums::log_level::LogLevel;
 use crate::enums::rip_decay_mechanism::RipDecayMechanism;
 use crate::enums::smbh_connection_mode::SmbhConnectionMode;
+use crate::galaxy::{Galaxy, process_mergers};
 use crate::gravity::compute_gravity_fft;
 use crate::helpers::black_hole::{revert_black_hole, set_as_black_hole};
-use crate::helpers::grid::{populate_grid, seed_initial_curvature};
+use crate::helpers::grid::{apply_galaxy_overdensity, populate_grid, seed_initial_curvature};
 use crate::helpers::particle::{apply_gravity_to_particle, initialize_particles, map_particle_to_cell};
 use crate::helpers::rip::compute_cell_rip_strength;
 use crate::helpers::transport::apply_matter_transport;
@@ -30,7 +31,7 @@ impl Drop for RawModeGuard {
     }
 }
 
-pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box<dyn std::error::Error>> {
     const STEP_DURATION: f64 = 0.01;
     const MAX_DIMPLE_NON_BH: f64 = 1e4;
     const DIRTY_GRAVITY_THRESHOLD: f64 = 1e-12;
@@ -58,6 +59,7 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
 
         let seed: u64 = rand::thread_rng().r#gen();
         let run = db.start_run(seed, Some("baseline")).expect("Failed to start run");
+
         println!(
             "{} {}{}{} {}{}{}",
             "Starting run".white(),
@@ -71,7 +73,9 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
 
         let mut grid = vec![vec![vec![Cell::new(); app_settings.inf_grid_depth]; app_settings.inf_grid_width]; app_settings.inf_grid_height];
 
-        seed_initial_curvature(&mut grid, &app_settings, db);
+        let mut galaxies = seed_initial_curvature(&mut grid, &app_settings, db);
+        Galaxy::assign_run_id(&mut galaxies, run.run_id);
+        let mut galaxy_next_id: i64 = -((galaxies.len() as i64) + 1);
 
         let num_particles = app_settings.structure_num_particles;
         let mut positions = vec![(0.0, 0.0, 0.0); num_particles];
@@ -84,6 +88,10 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
             _ = db.fail_run(run.run_id, message);
             return Err(err.into());
         }
+
+        // Apply galaxy overdensity boosts as a separate pass after base geometry.
+        // Keeps populate_grid single-responsibility (base geometry only).
+        apply_galaxy_overdensity(&mut grid, &galaxies, &app_settings);
 
         // Compute initial total matter as baseline for expansion calculation
         let mut previous_total_matter: f64 = grid
@@ -107,6 +115,7 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                 velocity_x: vx,
                 velocity_y: vy,
                 velocity_z: vz,
+                run_id: run.run_id,
             })
             .collect();
 
@@ -184,7 +193,7 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                             // formation is favored (the JWST overmassive-early-BH regime).
                             let smbh_probability = app_settings.smbh_formation_probability * f64::exp(-(timestep as f64) / app_settings.smbh_early_bias);
                             let mut rng = rand::thread_rng();
-                            if cell.curvature > app_settings.smbh_curvature_threshold && rng.gen_range(0.0..1.0) < smbh_probability {
+                            if cell.curvature > app_settings.smbh_curvature_threshold && rng.gen_range(0.0..1.0) < smbh_probability && galaxies.iter().any(|g| g.contains(height, width, depth)) {
                                 set_as_black_hole(cell, &next_black_hole_id);
                                 cell.is_supermassive = true;
                                 cell.is_rip_induced = false;
@@ -207,6 +216,18 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                             } else if cell.rip_strength > app_settings.rip_induced_threshold {
                                 set_as_black_hole(cell, &next_black_hole_id);
                                 cell.is_rip_induced = true;
+                            }
+                        }
+
+                        // Star formation/extinction — non-BH cells only.
+                        // BH checks above take priority; a cell dense enough to collapse
+                        // never reaches this branch. Hysteresis between formation and
+                        // extinction thresholds prevents rapid flickering.
+                        if !cell.is_black_hole {
+                            if !cell.is_star && cell.matter_density >= app_settings.star_formation_threshold && cell.matter_density < app_settings.collapse_density_threshold {
+                                cell.is_star = true;
+                            } else if cell.is_star && cell.matter_density < app_settings.star_extinction_threshold {
+                                cell.is_star = false;
                             }
                         }
 
@@ -276,11 +297,40 @@ pub fn run(app_settings: &AppSettings, db: &mut dyn DbProvider) -> Result<(), Bo
                         } else {
                             let drain = app_settings.rip_drain_rate * cell.rip_strength * cell.matter_density;
                             cell.matter_density = (cell.matter_density - drain).max(0.0);
+
+                            // Star burn: active stars slowly consume matter each timestep.
+                            // Burned matter stays in the cell as diffuse gas — density drops
+                            // but matter does not leave the grid, so galaxy budget is intact.
+                            if cell.is_star {
+                                cell.matter_density *= 1.0 - app_settings.star_burn_rate;
+                            }
                         }
                     });
                 });
             });
             apply_matter_transport(&mut grid, &app_settings, STEP_DURATION);
+
+            // ── Galaxy update pass ──
+            // Discover any newly-dense cells that should seed new galaxies.
+            let new_galaxies = Galaxy::discover_new(&grid, &galaxies, &app_settings, timestep, run.run_id, &mut galaxy_next_id);
+            galaxies.extend(new_galaxies);
+
+            // Update each active galaxy: recompute mass, centroid, radius.
+            for galaxy in galaxies.iter_mut().filter(|g| g.is_active) {
+                galaxy.update(&grid, &app_settings);
+            }
+
+            // Apply SMBH mass cap — must happen after update() so total_mass is current.
+            for galaxy in galaxies.iter().filter(|g| g.is_active) {
+                galaxy.apply_smbh_cap(&mut grid, &app_settings);
+            }
+
+            // Tag cells with their galaxy_id so it persists to the DB.
+            for galaxy in galaxies.iter().filter(|g| g.is_active) {
+                galaxy.tag_cells(&mut grid);
+            }
+
+            // Process mergers — smaller galaxy absorbed into larger.
 
             // Compute current total matter and update scale factor
             // Matter loss drives expansion; matter gain causes slight contraction.

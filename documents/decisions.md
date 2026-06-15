@@ -39,6 +39,18 @@ wins — but the test is fair.
 
 ---
 
+### Emergent inflation-like behavior as epistemic signal
+
+**Observation:** The simulation was not designed to produce inflation. The mechanism — matter crossing geometric thresholds into child geometries, removing itself from normal spacetime — was built to model black hole formation. When the scale factor was wired to respond to matter loss, an inflation-like profile emerged without targeting it: rapid early expansion driven by peak-density rip rates, smooth deceleration as the drain exhausts, graceful exit with no engineered cutoff.
+
+**Why this matters for the hypothesis:** Inflation as standardly formulated was constructed *backwards* — the inflaton field was invented specifically to produce flatness, horizon-agreement, and monopole dilution. Its fit to those observations is therefore weak evidence; a mechanism designed to fit will fit. Rip's inflation-like behavior was not solicited. The shape emerged from a single rule applied uniformly across all epochs: matter lost from normal spacetime expands it. That the same rule produces inflation-scale behavior early (when densities and rip rates are highest) and slow late-time expansion afterward — without separate physics for each epoch — is a stronger signal than a mechanism that was tuned to do so.
+
+**The structural argument:** Standard inflation requires different physics at different epochs (inflaton-dominated early, radiation/matter-dominated later, dark-energy-dominated now). Rip uses one rule throughout. Unification across epochs with emergent epoch-appropriate behavior is the more parsimonious outcome. The flatness and horizon problems that inflation was invented to solve also have a natural candidate answer here: if matter under extreme early-universe density bleeds off into rips rather than accumulating enough to reverse expansion, the rip mechanism acts as a pressure-release valve that naturally drives the geometry toward flatness without requiring a separate inflaton field.
+
+**Principle recorded here:** When a simulation produces a result it was not tuned to produce, that is a higher-quality signal than a result it was designed for. The inflation profile belongs in this category. Future results should be evaluated on the same criterion.
+
+---
+
 ### FFT Poisson solver for gravity (Jeans swindle for k=0)
 **Decision:** Solve ∇²φ = 4πGρ in Fourier space using three 1D FFT passes per axis
 with periodic boundary conditions. The k=0 mode (mean density) is set to zero — the

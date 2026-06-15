@@ -1,7 +1,7 @@
-use crate::AppSettings;
+use crate::AppSetting;
 use colored::Colorize;
 
-pub fn show_settings(app_settings: &AppSettings) {
+pub fn show_settings(app_settings: &AppSetting) {
     if !app_settings.quiet {
         println!("{}", "=== Simulation Configuration ===".blue());
         let map = serde_json::to_value(app_settings).unwrap();
