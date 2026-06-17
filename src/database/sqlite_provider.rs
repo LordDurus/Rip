@@ -4,6 +4,7 @@ use crate::database::entities::cell_position::CellPosition;
 use crate::database::entities::run::Run;
 use crate::database::entities::structure_particle::StructureParticle;
 use crate::enums::log_level::LogLevel;
+use crate::galaxy::Galaxy;
 use rusqlite::{Connection, Result, params};
 
 pub struct SqliteProvider {
@@ -121,7 +122,7 @@ impl DbProvider for SqliteProvider {
         Ok(())
     }
 
-    fn record_timestep_summary(&mut self, timestep: usize, step_duration_myr: f64, grid: &Vec<Vec<Vec<Cell>>>, run_id: i64, scale_factor: f64, total_matter: f64) -> Result<()> {
+    fn record_timestep_summary(&mut self, timestep: usize, step_duration_myr: f64, grid: &Vec<Vec<Vec<Cell>>>, run_id: i64, scale_factor: f64, total_matter: f64, galaxy_count: i64) -> Result<()> {
         let mut total_rip_strength = 0.0;
         let mut black_hole_count: i64 = 0;
         let mut smbh_count: i64 = 0;
@@ -159,8 +160,8 @@ impl DbProvider for SqliteProvider {
         let time_myr = timestep as f64 * step_duration_myr;
 
         self.conn.execute(
-            "insert into timestep_summary (timestep, time_myr, rip_strength_avg, scale_factor, run_id, total_matter, black_hole_count, gravity_magnitude_avg, smbh_count, star_count)
-				 values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "insert into timestep_summary (timestep, time_myr, rip_strength_avg, scale_factor, run_id, total_matter, black_hole_count, gravity_magnitude_avg, smbh_count, star_count, galaxy_count)
+				 values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 timestep as i64,
                 time_myr,
@@ -171,10 +172,66 @@ impl DbProvider for SqliteProvider {
                 black_hole_count,
                 avg_gravity_magnitude,
                 smbh_count,
-                star_count
+                star_count,
+                galaxy_count
             ],
         )?;
 
+        Ok(())
+    }
+
+    fn insert_galaxy(&mut self, galaxy: &mut Galaxy) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO galaxy (
+                run_id, formed_timestep,
+                centroid_col, centroid_row, centroid_layer,
+                radius, total_mass, stellar_mass, smbh_mass,
+                cell_count, is_active
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1)",
+            params![
+                galaxy.run_id,
+                galaxy.formed_timestep as i64,
+                galaxy.centroid_col,
+                galaxy.centroid_row,
+                galaxy.centroid_layer,
+                galaxy.radius,
+                galaxy.total_mass,
+                galaxy.stellar_mass,
+                galaxy.smbh_mass,
+                galaxy.cell_count as i64,
+            ],
+        )?;
+        galaxy.galaxy_id = self.conn.last_insert_rowid();
+        Ok(())
+    }
+
+    fn record_galaxy_timestep(&mut self, galaxy: &Galaxy, timestep: usize, smbh_count: i64) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO galaxy_timestep (
+                galaxy_id, timestep,
+                total_mass, stellar_mass, smbh_mass,
+                cell_count, smbh_count, radius,
+                centroid_col, centroid_row, centroid_layer
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                galaxy.galaxy_id,
+                timestep as i64,
+                galaxy.total_mass,
+                galaxy.stellar_mass,
+                galaxy.smbh_mass,
+                galaxy.cell_count as i64,
+                smbh_count,
+                galaxy.radius,
+                galaxy.centroid_col,
+                galaxy.centroid_row,
+                galaxy.centroid_layer,
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn deactivate_galaxy(&mut self, galaxy_id: i64) -> Result<()> {
+        self.conn.execute("UPDATE galaxy SET is_active = 0 WHERE galaxy_id = ?1", params![galaxy_id])?;
         Ok(())
     }
 

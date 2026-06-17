@@ -10,6 +10,7 @@ use rand::Rng;
 pub struct Galaxy {
     pub galaxy_id: i64,
     pub run_id: i64,
+    #[allow(dead_code)]
     pub formed_timestep: usize,
 
     /// Centroid in grid coordinates (real-valued, updated each timestep).
@@ -69,8 +70,10 @@ impl Galaxy {
         }
     }
 
-    /// Scan the grid for new overdensity seeds not yet claimed by any
-    /// active galaxy. Called each timestep to allow late-forming galaxies.
+    /// Scan the grid for new overdensity seeds not yet claimed by any active galaxy.
+    /// NOTE: O(grid × galaxy_count) — disabled in the timestep loop until spatial
+    /// indexing is added. Kept here for future use.
+    #[allow(dead_code)]
     pub fn discover_new(grid: &[Vec<Vec<Cell>>], existing: &[Galaxy], app_settings: &AppSetting, timestep: usize, run_id: i64, next_id: &mut i64) -> Vec<Galaxy> {
         let mut new_galaxies: Vec<Galaxy> = Vec::new();
 
@@ -83,13 +86,12 @@ impl Galaxy {
                     if cell.matter_density < app_settings.galaxy_formation_density_threshold {
                         continue;
                     }
-                    // Already inside an active galaxy?
                     let claimed = existing.iter().chain(new_galaxies.iter()).any(|g| g.is_active && g.contains(col, row, layer));
                     if claimed {
                         continue;
                     }
 
-                    *next_id -= 1; // still negative until persisted
+                    *next_id -= 1;
                     new_galaxies.push(Galaxy {
                         galaxy_id: *next_id,
                         run_id,
@@ -102,7 +104,7 @@ impl Galaxy {
                         stellar_mass: if cell.is_star { cell.matter_density } else { 0.0 },
                         smbh_mass: 0.0,
                         cell_count: 1,
-                        overdensity_boost: 1.0, // late-forming galaxies don't get init boost
+                        overdensity_boost: 1.0,
                         is_active: true,
                     });
                 }
@@ -112,122 +114,255 @@ impl Galaxy {
         new_galaxies
     }
 
-    /// Update this galaxy's mass, centroid, and radius from the current grid.
-    /// Returns the new total_mass so the caller can use it for the SMBH cap.
-    pub fn update(&mut self, grid: &[Vec<Vec<Cell>>], app_settings: &AppSetting) {
-        let mut total_mass = 0.0_f64;
-        let mut stellar_mass = 0.0_f64;
-        let mut smbh_mass = 0.0_f64;
-        let mut cell_count = 0_usize;
-        let mut cx = 0.0_f64;
-        let mut cy = 0.0_f64;
-        let mut cz = 0.0_f64;
-
-        for (col, col_cells) in grid.iter().enumerate() {
-            for (row, row_cells) in col_cells.iter().enumerate() {
-                for (layer, cell) in row_cells.iter().enumerate() {
-                    // Capture threshold is lower than formation — easier to join than seed.
-                    let density_ok = cell.matter_density >= app_settings.galaxy_capture_density_threshold || cell.is_black_hole; // BH cells always count
-                    if !density_ok {
-                        continue;
-                    }
-                    if !self.contains(col, row, layer) {
-                        continue;
-                    }
-
-                    let mass = cell.matter_density;
-                    total_mass += mass;
-                    cell_count += 1;
-                    cx += col as f64 * mass;
-                    cy += row as f64 * mass;
-                    cz += layer as f64 * mass;
-
-                    if cell.is_star && !cell.is_black_hole {
-                        stellar_mass += mass;
-                    }
-                    if cell.is_black_hole && cell.is_supermassive {
-                        smbh_mass += mass;
-                    }
-                }
-            }
-        }
-
-        self.cell_count = cell_count;
-        self.total_mass = total_mass;
-        self.stellar_mass = stellar_mass;
-        self.smbh_mass = smbh_mass;
-
-        // Update mass-weighted centroid (only if we have mass to weight by)
-        if total_mass > 0.0 {
-            self.centroid_col = cx / total_mass;
-            self.centroid_row = cy / total_mass;
-            self.centroid_layer = cz / total_mass;
-        }
-
-        // Radius grows proportionally to total mass each timestep.
-        // galaxy_mass_growth_rate is the fractional increase per unit mass:
-        //   new_radius = old_radius + total_mass * growth_rate
-        // Keeps small galaxies growing slowly, massive ones growing faster.
-        let new_radius = self.radius + total_mass * app_settings.galaxy_mass_growth_rate;
-        self.radius = new_radius.max(app_settings.galaxy_radius); // never shrink below seed radius
-    }
-
-    /// Apply the SMBH mass cap: any SMBH cell inside this galaxy whose
-    /// matter_density exceeds the cap gets clamped.
-    /// Cap = total_mass * galaxy_smbh_mass_fraction_cap
-    pub fn apply_smbh_cap(&self, grid: &mut Vec<Vec<Vec<Cell>>>, app_settings: &AppSetting) {
-        if self.total_mass <= 0.0 {
-            return;
-        }
-        let cap = self.total_mass * app_settings.galaxy_smbh_mass_fraction_cap;
-
-        for (col, col_cells) in grid.iter_mut().enumerate() {
-            for (row, row_cells) in col_cells.iter_mut().enumerate() {
-                for (layer, cell) in row_cells.iter_mut().enumerate() {
-                    if !cell.is_black_hole || !cell.is_supermassive {
-                        continue;
-                    }
-                    if !self.contains(col, row, layer) {
-                        continue;
-                    }
-                    if cell.matter_density > cap {
-                        cell.matter_density = cap;
-                    }
-                }
-            }
-        }
-    }
-
     /// True if grid position (col, row, layer) falls within this galaxy's radius.
+    #[inline(always)]
     pub fn contains(&self, col: usize, row: usize, layer: usize) -> bool {
         let dc = col as f64 - self.centroid_col;
         let dr = row as f64 - self.centroid_row;
         let dl = layer as f64 - self.centroid_layer;
         (dc * dc + dr * dr + dl * dl).sqrt() <= self.radius
     }
+}
 
-    /// Set galaxy_id on every cell inside this galaxy's radius.
-    /// Called after update() so the centroid and radius are current.
-    pub fn tag_cells(&self, grid: &mut Vec<Vec<Vec<Cell>>>) {
-        let id = self.galaxy_id;
-        for (col, col_cells) in grid.iter_mut().enumerate() {
-            for (row, row_cells) in col_cells.iter_mut().enumerate() {
-                for (layer, cell) in row_cells.iter_mut().enumerate() {
-                    if self.contains(col, row, layer) {
-                        cell.galaxy_id = id;
+/// Update all active galaxies and tag cells in a single O(grid_size) pass.
+///
+/// Replaces the old per-galaxy grid scans (update, apply_smbh_cap, tag_cells),
+/// which were O(grid × galaxy_count) and caused stalls with large galaxy counts.
+///
+/// Pass 1: iterate grid once — assign each qualifying cell to the first active
+///         galaxy that contains it, accumulate per-galaxy stats, tag cell.galaxy_id.
+/// Pass 2: write stats back to galaxies, update centroids and radii.
+/// Pass 3: iterate SMBH cells only — apply per-galaxy mass cap.
+pub fn update_all_galaxies(galaxies: &mut Vec<Galaxy>, grid: &mut Vec<Vec<Vec<Cell>>>, app_settings: &AppSetting) {
+    let n = galaxies.len();
+    if n == 0 {
+        return;
+    }
+
+    // Accumulators indexed by galaxy position in Vec.
+    let mut total_mass = vec![0.0_f64; n];
+    let mut stellar_mass = vec![0.0_f64; n];
+    let mut smbh_mass = vec![0.0_f64; n];
+    let mut cell_count = vec![0_usize; n];
+    let mut cx = vec![0.0_f64; n];
+    let mut cy = vec![0.0_f64; n];
+    let mut cz = vec![0.0_f64; n];
+    // Sum of SMBH connection strengths per galaxy — used in pass 3 to split
+    // the galaxy's SMBH mass budget competitively among its SMBHs.
+    let mut connection_strength_sum = vec![0.0_f64; n];
+
+    // Pass 1: single grid scan — O(grid_size × galaxy_count) worst case but
+    // exits the galaxy loop on first match, so typical cost is much lower.
+    for (col_idx, col_cells) in grid.iter_mut().enumerate() {
+        for (row_idx, row_cells) in col_cells.iter_mut().enumerate() {
+            for (layer_idx, cell) in row_cells.iter_mut().enumerate() {
+                // Reset tag — reassigned below if inside a galaxy.
+                cell.galaxy_id = 0;
+
+                let density_ok = cell.matter_density >= app_settings.galaxy_capture_density_threshold || cell.is_black_hole;
+                if !density_ok {
+                    continue;
+                }
+
+                for (i, galaxy) in galaxies.iter().enumerate() {
+                    if !galaxy.is_active {
+                        continue;
+                    }
+                    if galaxy.contains(col_idx, row_idx, layer_idx) {
+                        cell.galaxy_id = galaxy.galaxy_id;
+
+                        let mass = cell.matter_density;
+                        total_mass[i] += mass;
+                        cell_count[i] += 1;
+                        cx[i] += col_idx as f64 * mass;
+                        cy[i] += row_idx as f64 * mass;
+                        cz[i] += layer_idx as f64 * mass;
+
+                        if cell.is_star && !cell.is_black_hole {
+                            stellar_mass[i] += mass;
+                        }
+                        if cell.is_black_hole && cell.is_supermassive {
+                            smbh_mass[i] += mass;
+                            connection_strength_sum[i] += cell.smbh_connection_strength;
+                        }
+                        break; // cell belongs to first matching galaxy only
                     }
                 }
+            }
+        }
+    }
+
+    // Pass 2: write stats back, update centroids and radii.
+    for (i, galaxy) in galaxies.iter_mut().enumerate() {
+        if !galaxy.is_active {
+            continue;
+        }
+
+        galaxy.cell_count = cell_count[i];
+        galaxy.total_mass = total_mass[i];
+        galaxy.stellar_mass = stellar_mass[i];
+        galaxy.smbh_mass = smbh_mass[i];
+
+        if total_mass[i] > 0.0 {
+            galaxy.centroid_col = cx[i] / total_mass[i];
+            galaxy.centroid_row = cy[i] / total_mass[i];
+            galaxy.centroid_layer = cz[i] / total_mass[i];
+        }
+
+        // Radius grows with mass — never shrinks below seed radius.
+        let new_radius = galaxy.radius + total_mass[i] * app_settings.galaxy_mass_growth_rate;
+        galaxy.radius = new_radius.max(app_settings.galaxy_radius);
+    }
+
+    // Build galaxy_id -> Vec index map so pass 3 can reach the per-galaxy
+    // accumulators (connection_strength_sum) by the cell's galaxy_id tag.
+    let mut id_to_index: std::collections::HashMap<i64, usize> = std::collections::HashMap::new();
+    for (i, galaxy) in galaxies.iter().enumerate() {
+        if galaxy.is_active {
+            id_to_index.insert(galaxy.galaxy_id, i);
+        }
+    }
+
+    // Pass 3: competitive SMBH cap.
+    //
+    // The galaxy has a single SMBH mass budget = baryonic_mass * fraction.
+    // That budget is split among the galaxy's SMBHs in proportion to each
+    // SMBH's connection_strength relative to the galaxy's total. So:
+    //   - a galaxy with one strong SMBH and many weak ones gives almost the
+    //     whole budget to the strong one; the weak ones cap to near-zero.
+    //   - one dominant SMBH per galaxy emerges from the heavy-tailed
+    //     connection_strength distribution, not from any one-per-galaxy rule.
+    //
+    // Cap uses baryonic_mass (total minus SMBH) — the M-bulge reservoir,
+    // independent of SMBH mass so it can't feed its own growth.
+    for col_cells in grid.iter_mut() {
+        for row_cells in col_cells.iter_mut() {
+            for cell in row_cells.iter_mut() {
+                if !cell.is_black_hole || !cell.is_supermassive || cell.galaxy_id == 0 {
+                    continue;
+                }
+                let Some(&i) = id_to_index.get(&cell.galaxy_id) else {
+                    continue;
+                };
+
+                let baryonic_mass = (total_mass[i] - smbh_mass[i]).max(0.0);
+                if baryonic_mass <= 0.0 {
+                    continue;
+                }
+                let galaxy_smbh_budget = baryonic_mass * app_settings.galaxy_smbh_mass_fraction_cap;
+
+                // This SMBH's competitive share of the budget.
+                // If the connection-strength sum is zero (degenerate), fall back
+                // to an equal split is meaningless here — just cap to the full
+                // budget so a lone zero-strength SMBH isn't forced to zero.
+                let share = if connection_strength_sum[i] > 0.0 {
+                    cell.smbh_connection_strength / connection_strength_sum[i]
+                } else {
+                    1.0
+                };
+                let cap = galaxy_smbh_budget * share;
+
+                if cell.matter_density > cap {
+                    cell.matter_density = cap;
+                }
+            }
+        }
+    }
+
+    // Pass 4: SMBH merging within a galaxy.
+    //
+    // An SMBH whose competitive share falls below galaxy_smbh_stall_share_threshold
+    // has lost the competition for its galaxy's mass budget. Physically, such a
+    // black hole would spiral into the galaxy's dominant SMBH via dynamical
+    // friction — all BHs in a galaxy eventually merge at the centre. Rather than
+    // simulate the inspiral, we merge it immediately: its mass transfers to the
+    // galaxy's most massive SMBH (the winner), and the stalled cell reverts to
+    // ordinary matter (is_black_hole and is_supermassive cleared).
+    //
+    // Done in two sweeps to satisfy the borrow checker:
+    //   4a. Find each galaxy's winner coordinates and accumulate stalled mass.
+    //   4b. Clear stalled cells; then add absorbed mass to each winner.
+
+    // Winner tracking per galaxy index: (mass, col, row, layer)
+    let mut winner: Vec<Option<(f64, usize, usize, usize)>> = vec![None; n];
+    let mut absorbed_mass = vec![0.0_f64; n];
+
+    // 4a: identify winners and stalled mass. Read-only scan.
+    for (col_idx, col_cells) in grid.iter().enumerate() {
+        for (row_idx, row_cells) in col_cells.iter().enumerate() {
+            for (layer_idx, cell) in row_cells.iter().enumerate() {
+                if !cell.is_black_hole || !cell.is_supermassive || cell.galaxy_id == 0 {
+                    continue;
+                }
+                let Some(&i) = id_to_index.get(&cell.galaxy_id) else {
+                    continue;
+                };
+
+                // Track the most massive SMBH in this galaxy as the winner.
+                let is_new_winner = match winner[i] {
+                    None => true,
+                    Some((best_mass, _, _, _)) => cell.matter_density > best_mass,
+                };
+                if is_new_winner {
+                    winner[i] = Some((cell.matter_density, col_idx, row_idx, layer_idx));
+                }
+            }
+        }
+    }
+
+    // 4b: clear stalled SMBHs and accumulate their mass to the galaxy total.
+    for (col_idx, col_cells) in grid.iter_mut().enumerate() {
+        for (row_idx, row_cells) in col_cells.iter_mut().enumerate() {
+            for (layer_idx, cell) in row_cells.iter_mut().enumerate() {
+                if !cell.is_black_hole || !cell.is_supermassive || cell.galaxy_id == 0 {
+                    continue;
+                }
+                let Some(&i) = id_to_index.get(&cell.galaxy_id) else {
+                    continue;
+                };
+
+                // Don't merge the winner into itself.
+                if let Some((_, wc, wr, wl)) = winner[i] {
+                    if wc == col_idx && wr == row_idx && wl == layer_idx {
+                        continue;
+                    }
+                }
+
+                let share = if connection_strength_sum[i] > 0.0 {
+                    cell.smbh_connection_strength / connection_strength_sum[i]
+                } else {
+                    1.0
+                };
+
+                if share < app_settings.galaxy_smbh_stall_share_threshold {
+                    // Stalled — merge into winner. Transfer mass, revert cell.
+                    absorbed_mass[i] += cell.matter_density;
+                    cell.is_black_hole = false;
+                    cell.is_supermassive = false;
+                    cell.smbh_connection_strength = 0.0;
+                    cell.black_hole_id = None;
+                    cell.matter_density = 0.0; // mass moved to winner, not left behind
+                }
+            }
+        }
+    }
+
+    // 4b (cont.): deposit absorbed mass into each galaxy's winner cell.
+    for (i, w) in winner.iter().enumerate() {
+        if let Some((_, wc, wr, wl)) = *w {
+            if absorbed_mass[i] > 0.0 {
+                grid[wc][wr][wl].matter_density += absorbed_mass[i];
             }
         }
     }
 }
 
 /// Check all active galaxy pairs for overlap. When two overlap, the
-/// smaller (by total_mass) is deactivated and its mass is added to the
-/// larger. Returns the indices of galaxies that were deactivated this
-/// timestep so the caller can persist the change.
+/// smaller (by total_mass) is deactivated and its mass absorbed by the larger.
+/// Returns indices of galaxies deactivated this timestep.
 ///
-/// Overlap condition: distance between centroids < sum_of_radii * merge_overlap_fraction
+/// Overlap condition: centroid distance < (r_i + r_j) * merge_overlap_fraction
+#[allow(dead_code)]
 pub fn process_mergers(galaxies: &mut Vec<Galaxy>, app_settings: &AppSetting) -> Vec<usize> {
     let mut deactivated: Vec<usize> = Vec::new();
     let n = galaxies.len();
@@ -248,7 +383,6 @@ pub fn process_mergers(galaxies: &mut Vec<Galaxy>, app_settings: &AppSetting) ->
             let threshold = (galaxies[i].radius + galaxies[j].radius) * app_settings.galaxy_merge_overlap_fraction;
 
             if dist < threshold {
-                // Merge smaller into larger
                 let (survivor, absorbed) = if galaxies[i].total_mass >= galaxies[j].total_mass { (i, j) } else { (j, i) };
 
                 let absorbed_mass = galaxies[absorbed].total_mass;
@@ -261,7 +395,7 @@ pub fn process_mergers(galaxies: &mut Vec<Galaxy>, app_settings: &AppSetting) ->
                 galaxies[survivor].smbh_mass += absorbed_smbh;
                 galaxies[survivor].cell_count += absorbed_cells;
 
-                // Survivor radius grows to encompass the absorbed galaxy
+                // Survivor radius expands to encompass absorbed galaxy.
                 galaxies[survivor].radius = galaxies[survivor].radius.max(galaxies[absorbed].radius + dist);
 
                 galaxies[absorbed].is_active = false;

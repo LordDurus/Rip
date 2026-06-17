@@ -20,7 +20,7 @@ del /q output\*.html 2>nul
 cls
 
 cd scripts
-
+py generate_flowchart.py
 py plot_inflation.py --run-id %run_id%
 py plot_cmb_power.py --run-id %run_id% --timestep %timestep%
 py plot_cmb_power.py --run-id %run_id% --timestep %timestep% --field matter_density

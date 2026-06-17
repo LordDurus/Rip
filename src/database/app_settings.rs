@@ -167,6 +167,15 @@ pub struct AppSetting {
     pub galaxy_smbh_mass_fraction_cap: f64,
     /// Fraction of (r_i + r_j) within which two galaxies trigger a merger.
     pub galaxy_merge_overlap_fraction: f64,
+    /// Maximum |matter_delta| at which star formation is permitted.
+    /// When matter loss rate exceeds this the universe is too hot/chaotic
+    /// for gravitational collapse (analog of pre-recombination epoch).
+    /// Extinction is always allowed regardless of this threshold.
+    pub star_formation_max_matter_delta: f64,
+    /// Competitive share below which an SMBH is considered stalled and merges
+    /// into its galaxy's dominant SMBH.
+    /// share = smbh_connection_strength / galaxy's total smbh connection strength
+    pub galaxy_smbh_stall_share_threshold: f64,
 }
 
 impl AppSetting {
@@ -263,6 +272,10 @@ impl AppSetting {
         };
 
         AppSetting {
+            quiet: get_bool("QUIET"),
+            num_timesteps: get_usize("NUM_TIMESTEPS"),
+            initial_geometry: get_string("INITIAL_GEOMETRY"),
+            uniform_density: get_f64("UNIFORM_DENSITY"),
             transport_rate: get_f64("TRANSPORT_RATE"),
             num_runs: get_usize("NUM_RUNS"),
             num_cores: get_u32("NUM_CORES"),
@@ -274,8 +287,6 @@ impl AppSetting {
             gravity: get_f64("GRAVITY"),
             light_speed: get_f64("LIGHT_SPEED"),
             decay_factor: get_f64("DECAY_FACTOR"),
-            rip_initial: get_f64("RIP_INITIAL"),
-            rip_decay_rate: get_f64("RIP_DECAY_RATE"),
             time_step_size: get_f64("TIME_STEP_SIZE"),
             max_simulation_time: get_f64("MAX_SIMULATION_TIME"),
             dark_matter_ratio: get_f64("DARK_MATTER_RATIO"),
@@ -283,17 +294,16 @@ impl AppSetting {
             inf_grid_width: get_usize("INF_GRID_WIDTH"),
             inf_grid_height: get_usize("INF_GRID_HEIGHT"),
             inf_grid_depth: get_usize("INF_GRID_DEPTH"),
-            num_timesteps: get_usize("NUM_TIMESTEPS"),
             curvature_threshold: get_f64("CURVATURE_THRESHOLD"),
             collapse_density_threshold: get_f64("COLLAPSE_DENSITY_THRESHOLD"),
             structure_num_particles: get_usize("STRUCTURE_NUM_PARTICLES"),
             rip_minimum_strength: get_f64("RIP_MINIMUM_STRENGTH"),
-            quiet: get_bool("QUIET"),
             rip_curvature_weight: get_f64("RIP_CURVATURE_WEIGHT"),
             rip_density_weight: get_f64("RIP_DENSITY_WEIGHT"),
             rip_evaporation_rate: get_f64("RIP_EVAPORATION_RATE"),
-            initial_geometry: get_string("INITIAL_GEOMETRY"),
-            uniform_density: get_f64("UNIFORM_DENSITY"),
+            rip_decay_mechanism: get_string("RIP_DECAY_MECHANISM"),
+            rip_initial: get_f64("RIP_INITIAL"),
+            rip_decay_rate: get_f64("RIP_DECAY_RATE"),
             blob_count: get_usize("BLOB_COUNT"),
             blob_peak_density: get_f64("BLOB_PEAK_DENSITY"),
             blob_sigma_min: get_f64("BLOB_SIGMA_MIN"),
@@ -302,7 +312,6 @@ impl AppSetting {
             perlin_frequency: get_f64("PERLIN_FREQUENCY"),
             perlin_amplitude: get_f64("PERLIN_AMPLITUDE"),
             perlin_seed: get_u32("PERLIN_SEED"),
-            rip_decay_mechanism: get_string("RIP_DECAY_MECHANISM"),
             decay_time_rate: get_f64("DECAY_TIME_RATE"),
             decay_healing_base: get_f64("DECAY_HEALING_BASE"),
             decay_healing_damping: get_f64("DECAY_HEALING_DAMPING"),
@@ -323,6 +332,7 @@ impl AppSetting {
             star_formation_threshold: get_f64("STAR_FORMATION_THRESHOLD"),
             star_extinction_threshold: get_f64("STAR_EXTINCTION_THRESHOLD"),
             star_burn_rate: get_f64("STAR_BURN_RATE"),
+            star_formation_max_matter_delta: get_f64("STAR_FORMATION_MAX_MATTER_DELTA"),
             galaxy_count: get_usize("GALAXY_COUNT"),
             galaxy_radius: get_f64("GALAXY_RADIUS"),
             galaxy_overdensity: get_f64("GALAXY_OVERDENSITY"),
@@ -332,6 +342,7 @@ impl AppSetting {
             galaxy_mass_growth_rate: get_f64("GALAXY_MASS_GROWTH_RATE"),
             galaxy_smbh_mass_fraction_cap: get_f64("GALAXY_SMBH_MASS_FRACTION_CAP"),
             galaxy_merge_overlap_fraction: get_f64("GALAXY_MERGE_OVERLAP_FRACTION"),
+            galaxy_smbh_stall_share_threshold: get_f64("GALAXY_SMBH_STALL_SHARE_THRESHOLD"),
         }
     }
 

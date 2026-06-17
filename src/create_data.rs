@@ -5,7 +5,7 @@ use crate::database::entities::structure_particle::StructureParticle;
 use crate::enums::log_level::LogLevel;
 use crate::enums::rip_decay_mechanism::RipDecayMechanism;
 use crate::enums::smbh_connection_mode::SmbhConnectionMode;
-use crate::galaxy::{Galaxy, process_mergers};
+use crate::galaxy::{Galaxy, update_all_galaxies};
 use crate::gravity::compute_gravity_fft;
 use crate::helpers::black_hole::{revert_black_hole, set_as_black_hole};
 use crate::helpers::grid::{apply_galaxy_overdensity, populate_grid, seed_initial_curvature};
@@ -75,7 +75,7 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
 
         let mut galaxies = seed_initial_curvature(&mut grid, &app_settings, db);
         Galaxy::assign_run_id(&mut galaxies, run.run_id);
-        let mut galaxy_next_id: i64 = -((galaxies.len() as i64) + 1);
+        let mut _galaxy_next_id: i64 = -((galaxies.len() as i64) + 1);
 
         let num_particles = app_settings.structure_num_particles;
         let mut positions = vec![(0.0, 0.0, 0.0); num_particles];
@@ -94,6 +94,10 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
         apply_galaxy_overdensity(&mut grid, &galaxies, &app_settings);
 
         // Compute initial total matter as baseline for expansion calculation
+        // Start "maximally unstable" so star formation is blocked until the first
+        // real matter_delta proves the universe has stabilised (inflation ending).
+        // Using 0.0 here would wrongly read as "stable" on timestep 0.
+        let mut previous_matter_delta: f64 = f64::INFINITY;
         let mut previous_total_matter: f64 = grid
             .iter()
             .flat_map(|col| col.iter())
@@ -172,8 +176,21 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                 break;
             }
 
+            // ── Galaxy update pass ──
+            // Runs BEFORE the cell update so SMBH formation uses current galaxy radii.
+            // NOTE: discover_new disabled (O(grid × galaxy_count)) until spatial indexing added.
+            // Single-pass: stats, centroids, radii, SMBH cap, cell tagging.
+            update_all_galaxies(&mut galaxies, &mut grid, &app_settings);
+
+            // Use previous timestep's matter_delta to gate star formation.
+            // matter_delta for the current timestep isn't computed until after
+            // the cell update — using the prior step's value is correct:
+            // we're asking "was the universe stable enough last step for stars to form?"
+            let matter_delta_snapshot = previous_matter_delta;
+
             grid.par_iter_mut().enumerate().for_each(|(height, col)| {
                 let running = Arc::clone(&running);
+                let matter_delta = matter_delta_snapshot;
                 col.iter_mut().enumerate().for_each(|(width, row)| {
                     row.iter_mut().enumerate().for_each(|(depth, cell)| {
                         if !running.load(Ordering::SeqCst) {
@@ -224,7 +241,13 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                         // never reaches this branch. Hysteresis between formation and
                         // extinction thresholds prevents rapid flickering.
                         if !cell.is_black_hole {
-                            if !cell.is_star && cell.matter_density >= app_settings.star_formation_threshold && cell.matter_density < app_settings.collapse_density_threshold {
+                            // Star formation gated on matter_delta: when matter loss rate
+                            // exceeds the threshold the universe is too hot/chaotic for
+                            // gravitational collapse to produce stars (analog of pre-recombination).
+                            // Extinction is always allowed — stars can die regardless of epoch.
+                            let star_formation_allowed = matter_delta.abs() < app_settings.star_formation_max_matter_delta;
+                            if !cell.is_star && star_formation_allowed && cell.matter_density >= app_settings.star_formation_threshold && cell.matter_density < app_settings.collapse_density_threshold
+                            {
                                 cell.is_star = true;
                             } else if cell.is_star && cell.matter_density < app_settings.star_extinction_threshold {
                                 cell.is_star = false;
@@ -295,7 +318,11 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                                 }
                             }
                         } else {
-                            let drain = app_settings.rip_drain_rate * cell.rip_strength * cell.matter_density;
+                            // Cells inside a galaxy get partial drain protection —
+                            // galaxy structure resists rip-driven matter loss.
+                            // galaxy_id > 0 means tagged by update_all_galaxies this timestep.
+                            let drain_factor = if cell.galaxy_id > 0 { 0.1 } else { 1.0 };
+                            let drain = app_settings.rip_drain_rate * cell.rip_strength * cell.matter_density * drain_factor;
                             cell.matter_density = (cell.matter_density - drain).max(0.0);
 
                             // Star burn: active stars slowly consume matter each timestep.
@@ -309,26 +336,6 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                 });
             });
             apply_matter_transport(&mut grid, &app_settings, STEP_DURATION);
-
-            // ── Galaxy update pass ──
-            // Discover any newly-dense cells that should seed new galaxies.
-            let new_galaxies = Galaxy::discover_new(&grid, &galaxies, &app_settings, timestep, run.run_id, &mut galaxy_next_id);
-            galaxies.extend(new_galaxies);
-
-            // Update each active galaxy: recompute mass, centroid, radius.
-            for galaxy in galaxies.iter_mut().filter(|g| g.is_active) {
-                galaxy.update(&grid, &app_settings);
-            }
-
-            // Apply SMBH mass cap — must happen after update() so total_mass is current.
-            for galaxy in galaxies.iter().filter(|g| g.is_active) {
-                galaxy.apply_smbh_cap(&mut grid, &app_settings);
-            }
-
-            // Tag cells with their galaxy_id so it persists to the DB.
-            for galaxy in galaxies.iter().filter(|g| g.is_active) {
-                galaxy.tag_cells(&mut grid);
-            }
 
             // Process mergers — smaller galaxy absorbed into larger.
 
@@ -352,6 +359,7 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
             }
 
             previous_total_matter = current_total_matter;
+            previous_matter_delta = matter_delta;
 
             // Apply gravity to particles and update dimple strength
             for particle in &mut particles {
@@ -397,7 +405,8 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
             }
 
             db.save_all_cells(run.run_id, &mut grid).expect("Error saving cells");
-            db.record_timestep_summary(timestep, 100.0, &grid, run.run_id, scale_factor, current_total_matter)
+            let active_galaxy_count = galaxies.iter().filter(|g| g.is_active).count() as i64;
+            db.record_timestep_summary(timestep, 100.0, &grid, run.run_id, scale_factor, current_total_matter, active_galaxy_count)
                 .expect("failed to record rip field summary");
         }
 
