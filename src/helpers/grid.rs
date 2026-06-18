@@ -1,4 +1,4 @@
-use crate::AppSettings;
+use crate::AppSetting;
 use crate::database::db_provider::DbProvider;
 use crate::database::entities::cell::Cell;
 use crate::initial_geometry::InitialGeometry;
@@ -102,14 +102,17 @@ pub fn populate_grid(
         }
     }
 
-    Ok(())
+    return Ok(());
 }
 
-pub fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSettings, db: &mut dyn DbProvider) {
+pub fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSetting, db: &mut dyn DbProvider) -> Vec<crate::galaxy::Galaxy> {
     let progress_bar: ProgressBar = ProgressBar::new((settings.inf_grid_height * settings.inf_grid_width * settings.inf_grid_depth) as u64);
-
     let mut rng = rand::thread_rng();
 
+    // Galaxies are no longer seeded here. They emerge from the density field via
+    // friends-of-friends after inflation (see galaxy::find_galaxies). The initial
+    // curvature is the broad-spectrum primordial fluctuation field — random per
+    // cell — out of which structure later condenses. No discrete galaxy lumps.
     for height in 0..settings.inf_grid_height {
         for width in 0..settings.inf_grid_width {
             for depth in 0..settings.inf_grid_depth {
@@ -121,5 +124,8 @@ pub fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSett
             }
         }
     }
+
     progress_bar.finish_with_message("Seeding simulation complete.");
+    // Return empty: galaxies are found dynamically each post-inflation timestep.
+    Vec::new()
 }

@@ -39,6 +39,18 @@ wins — but the test is fair.
 
 ---
 
+### Emergent inflation-like behavior as epistemic signal
+
+**Observation:** The simulation was not designed to produce inflation. The mechanism — matter crossing geometric thresholds into child geometries, removing itself from normal spacetime — was built to model black hole formation. When the scale factor was wired to respond to matter loss, an inflation-like profile emerged without targeting it: rapid early expansion driven by peak-density rip rates, smooth deceleration as the drain exhausts, graceful exit with no engineered cutoff.
+
+**Why this matters for the hypothesis:** Inflation as standardly formulated was constructed *backwards* — the inflaton field was invented specifically to produce flatness, horizon-agreement, and monopole dilution. Its fit to those observations is therefore weak evidence; a mechanism designed to fit will fit. Rip's inflation-like behavior was not solicited. The shape emerged from a single rule applied uniformly across all epochs: matter lost from normal spacetime expands it. That the same rule produces inflation-scale behavior early (when densities and rip rates are highest) and slow late-time expansion afterward — without separate physics for each epoch — is a stronger signal than a mechanism that was tuned to do so.
+
+**The structural argument:** Standard inflation requires different physics at different epochs (inflaton-dominated early, radiation/matter-dominated later, dark-energy-dominated now). Rip uses one rule throughout. Unification across epochs with emergent epoch-appropriate behavior is the more parsimonious outcome. The flatness and horizon problems that inflation was invented to solve also have a natural candidate answer here: if matter under extreme early-universe density bleeds off into rips rather than accumulating enough to reverse expansion, the rip mechanism acts as a pressure-release valve that naturally drives the geometry toward flatness without requiring a separate inflaton field.
+
+**Principle recorded here:** When a simulation produces a result it was not tuned to produce, that is a higher-quality signal than a result it was designed for. The inflation profile belongs in this category. Future results should be evaluated on the same criterion.
+
+---
+
 ### FFT Poisson solver for gravity (Jeans swindle for k=0)
 **Decision:** Solve ∇²φ = 4πGρ in Fourier space using three 1D FFT passes per axis
 with periodic boundary conditions. The k=0 mode (mean density) is set to zero — the
@@ -74,6 +86,82 @@ finds its own equilibrium.
 True mass tracking inside black holes is deferred until black hole healing
 (`RipDecayMechanism::SelfHealing`) is implemented, at which point the return path
 for matter needs a physically motivated value.
+
+---
+
+## Galaxy Structure & SMBH Competition (galaxies branch)
+
+### One dominant SMBH per galaxy emerges from competition, not enforcement
+**Decision:** A galaxy has a single SMBH mass budget — a fraction of its baryonic
+mass (total non-SMBH matter inside the galaxy radius). That budget is split among
+all SMBHs in the galaxy in proportion to each one's `smbh_connection_strength`
+relative to the galaxy's total connection strength. SMBHs are not capped
+individually; they compete for one shared budget.
+
+**Reason:** Capping each SMBH independently at a fraction of galaxy mass let N SMBHs
+each grow to the cap, so total SMBH mass scaled with N — hundreds of overmassive
+holes per galaxy. The fix had to make dominance *emerge* rather than be imposed.
+A shared budget split by connection strength does this: because the connection
+strength distribution is heavy-tailed, one SMBH per galaxy typically holds the
+overwhelming majority of the budget and the rest are starved. We never write a
+"one SMBH per galaxy" rule — the single dominant hole falls out of the competition.
+
+**Why not enforce one-per-galaxy directly:** Special-casing the count in code is a
+red flag — it would produce the right number for the wrong reason and hide whatever
+the physics actually does. The same principle recorded for emergent inflation applies:
+a result that emerges from a uniform rule is higher-quality evidence than one
+engineered to appear.
+
+**Cap is on baryonic mass, not total or stellar mass:** Using total galaxy mass made
+the cap self-referential (a massive SMBH inflated total mass, raising its own cap —
+runaway). Using stellar mass alone failed at early times when no stars had formed yet,
+so the cap was zero and did nothing. Baryonic mass (total minus SMBH mass) is the
+M-bulge reservoir: the matter available to feed the hole, independent of the hole's
+own mass. This is the physically motivated denominator and the one that is non-zero
+from the first timestep.
+
+---
+
+### Stalled SMBHs merge into the galaxy's dominant hole
+**Decision:** An SMBH whose competitive share falls below
+`galaxy_smbh_stall_share_threshold` is merged into its galaxy's most massive SMBH.
+Its mass transfers to the winner; the stalled cell reverts to ordinary matter
+(`is_black_hole` and `is_supermassive` cleared, connection strength zeroed).
+
+**Reason:** In reality every black hole in a galaxy spirals to the center via
+dynamical friction and merges — there is no stable configuration of hundreds of
+co-orbiting SMBHs. Simulating the full inspiral is unnecessary; the end state is
+known. The share threshold is our knob for *when* we declare the merge has happened
+rather than tracking the orbit. This also makes `smbh_count` report real surviving
+holes instead of counting starved seeds that carry no mass.
+
+**Mass is conserved in the merge:** the loser's matter is added to the winner's cell,
+not discarded. The galaxy's SMBH budget is unchanged by a merge — only its
+distribution across cells changes (consolidating toward the winner).
+
+**Math-driven, sweep-tunable:** the threshold is a single `app_setting`, so the
+parameter sweep tool can locate the value at which the surviving-SMBH count matches
+the observed one-per-galaxy expectation, rather than that count being hardcoded.
+
+---
+
+### Star formation gated on matter stability (post-inflation only)
+**Decision:** A cell may only become a star when the previous timestep's
+`|matter_delta|` is below `star_formation_max_matter_delta`. `previous_matter_delta`
+is initialized to infinity so formation is blocked until the first real delta proves
+the universe has stabilized.
+
+**Reason:** Stars cannot form while spacetime is expanding too rapidly for matter to
+gravitationally collapse — the analog of the pre-recombination epoch, when the
+universe was too hot for neutral structure. `matter_delta` is already the quantity
+that drives the scale factor, so its magnitude is a natural in-simulation proxy for
+"how violent is the current epoch" without introducing a separate clock or a magic
+timestep number. Gating on it means star formation switches on by itself once the
+inflation burst settles, rather than at a hardcoded time.
+
+**The initialization matters:** seeding `previous_matter_delta` at 0.0 read as
+"perfectly stable" on timestep 0 and let stars form during the most violent part of
+the run. Infinity is the correct default — maximally unstable until proven otherwise.
 
 ---
 
@@ -202,18 +290,290 @@ WHERE run_id = 1
 ORDER BY key;
 ```
 ```
-(paste result here)
+key                                 value
+ACCRETION_RATE	                    1e-6
+BH_DRAIN_RATE                       0.01
+BLOB_COUNT	                        5
+BLOB_PEAK_DENSITY	                  10.0
+BLOB_SIGMA_MAX	                    8.0
+BLOB_SIGMA_MIN	                    2.0
+COLLAPSE_DENSITY_THRESHOLD	        1.5
+CURVATURE_THRESHOLD                 0.08
+DARK_GRAVITY_BOOST                  1.0
+DARK_MATTER_RATIO                   0.85
+DECAY_DIFFUSION_COEFF               0.1
+DECAY_FACTOR                        0.9999
+DECAY_HEALING_BASE                  0.05
+DECAY_HEALING_DAMPING               1.0
+DECAY_INVERSE_RATE	                0.05
+DECAY_MATTER_RATE                   0.05
+DECAY_MATTER_THRESHOLD              0.001
+DECAY_TIME_RATE                     0.05
+GALAXY_CAPTURE_DENSITY_THRESHOLD    0.1
+GALAXY_COUNT                        50
+GALAXY_CURVATURE_BOOST              0.05
+GALAXY_FORMATION_DENSITY_THRESHOLD  0.5
+GALAXY_MASS_GROWTH_RATE	            1e-6
+GALAXY_MERGE_OVERLAP_FRACTION       0.75
+GALAXY_OVERDENSITY                  3.0
+GALAXY_RADIUS                       4.0
+GALAXY_SMBH_MASS_FRACTION_CAP       0.1
+GRAVITY                             6.67430e-11
+GRAVITY_CURVATURE_COUPLING          0.0025
+GRAVITY_DENSITY_COUPLING            0.025
+INF_GRID_DEPTH                      64
+INF_GRID_HEIGHT                     64
+INF_GRID_WIDTH                      64
+INITIAL_GEOMETRY                    perlin
+LIGHT_SPEED                         3.0e8
+MATTER_EXPANSION_RATE               1e-6
+MAX_SIMULATION_TIME                 10.0
+NUM_CORES                           0
+NUM_RUNS                            1
+NUM_TIMESTEPS                       5000
+PERLIN_AMPLITUDE                    1.0
+PERLIN_FREQUENCY                    0.05
+PERLIN_OCTAVES                      4
+PERLIN_SEED                         42
+QUIET                               0
+RIP_CURVATURE_WEIGHT                0.5
+RIP_DECAY_MECHANISM                 self_healing
+RIP_DECAY_RATE                      0.05
+RIP_DENSITY_WEIGHT                  1.0
+RIP_DRAIN_RATE                      1.25e-8
+RIP_EVAPORATION_RATE                0.05
+RIP_INDUCED_THRESHOLD               50000
+RIP_INITIAL                         1e4
+RIP_MINIMUM_STRENGTH                1e-6
+SMBH_ACCRETION_RATE                 0.03
+SMBH_CONNECTION_ALPHA               4.0
+SMBH_CONNECTION_CURVATURE_RATE      6.0
+SMBH_CONNECTION_INDEPENDENT_RATE    0.03
+SMBH_CONNECTION_MODE                tied_to_curvature
+SMBH_CURVATURE_THRESHOLD            0.095
+SMBH_EARLY_BIAS                     300.0
+SMBH_FORMATION_PROBABILITY          0.02
+SMBH_INITIAL_DENSITY                50.0
+STAR_BURN_RATE                      0.0001
+STAR_EXTINCTION_THRESHOLD           0.4
+STAR_FORMATION_MAX_MATTER_DELTA     50.0
+STAR_FORMATION_THRESHOLD            0.8
+STRUCTURE_NUM_PARTICLES             1000
+TIME_STEP_SIZE                      0.01
+TRANSPORT_RATE                      0.025
+UNIFORM_DENSITY                     1.0
 ```
 
 ### Timeseries — the arc (downsampled every 25 steps)
 ```sql
-SELECT timestep, black_hole_count, total_matter, scale_factor_avg
+SELECT timestep as st, black_hole_count, total_matter, scale_factor
 FROM timestep_summary
 WHERE run_id = 1 AND timestep % 25 = 0
 ORDER BY timestep;
 ```
 ```
-(paste result here)
+st    black_hole_count  total_matter      scale_factor
+0     11187             254876.750173958	1.02934751978424
+25	  14417	            249323.566957022	1.03507957600435
+50	  15973	            245957.297573483	1.0385698039184
+75	  13759	            245828.357253629	1.0387037260749
+100	  12330	            242899.6224866    1.04175027287623
+125	  12371	            239744.492368874	1.04504232122679
+150	  11279	            238064.607907908	1.0467993469702
+175	  8531	            236883.336942392	1.04803663128564
+200	  9405	            232492.027745765	1.05264900394833
+225	  10337	            228919.81041496   1.05641601925634
+250	  9944              226343.369941337	1.05914132152732
+275	  10516	            222580.789777964	1.06313393220249
+300	  13254	            217630.803965421	1.06840947624587
+325	  14876	            213779.539243416	1.07253213760483
+350	  15872	            210118.317287277	1.07646611299981
+375	  16984	            206506.036655352	1.08036164232737
+400	  17763	            203379.746260048	1.08374445162012
+425	  18243	            200296.123527111	1.08709146846429
+450	  18745	            197253.55142909   1.09040405947728
+475	  19089	            194613.175390877	1.09328694049802
+500	  19262	            191951.178738777	1.09620114375217
+525	  19365	            189412.356976597	1.09898773890909
+550	  19579	            186980.986897854	1.10166303581488
+575	  19655	            184560.837109833	1.1043324542708
+600	  19693	            182263.976160351	1.10687186758349
+625   19764             180077.901126049	1.10929421929601
+650	  19710	            177981.961174192	1.11162167161671
+675 	19710	            175820.685375536	1.11402679075952
+700	  19752	            173759.365976334	1.1163255241925
+725	  19638	            171898.470341231	1.11840482356735
+750	  19570	            169893.439956131	1.1206495088005
+775	  19582	            167973.894924655	1.12280271192117
+800	  19485	            166275.789692523	1.12471096883291
+825	  19489	            164343.823083889	1.12688597321045
+850	  19416	            162595.212133658	1.12885818217344
+875	  19396	            160909.350365551	1.13076288610703
+900	  19294	            159234.227988595	1.13265863968691
+925	  19223	            157652.833433386	1.1344512369208
+950	  19192	            156036.860429997	1.13628596152678
+975	  19132	            154443.057063584	1.13809842188651
+1000	19056	            152937.288851364	1.13981342518725
+1025	18965	            151495.249790703	1.1414582663458
+1050	18897	            150051.558244927	1.14310737010693
+1075	18866           	148593.714419263	1.144775057447
+1100	18802           	147214.057620921	1.14635554415149
+1125	18742	            145837.980316357	1.14793410385976
+1150	18697	            144502.026549725	1.14946871560658
+1175	18652	            143155.268412454	1.15101781484973
+1200	18598	            141905.312481888	1.15245743593761
+1225	18525	            140665.746756359	1.15388686843006
+1250	18443	            139461.618194277	1.15527713342666
+1275	18426	            138221.634135425	1.1567105471771
+1300	18326	            137104.072830827	1.15800396472733
+1325	18284	            135969.421300623	1.1593186414068
+1350	18222	            134827.35361686   1.16064341811067
+1375	18211	            133687.61261706   1.16196700513036
+1400	18201	            132542.936854369	1.1632978421413
+1425	18130	            131496.288148618	1.16451604372553
+1450	18064	            130461.556856683	1.16572162853653
+1475	18015	            129464.247089765	1.16688479402392
+1500	18008	            128411.423378262	1.16811396494026
+1525	17928	            127456.583869953	1.16922985896927
+1550	17872	            126512.519019032	1.17033420898876
+1575	17847	            125535.322801821	1.17147841411607
+1600	17780	            124624.735377435	1.17254563345241
+1625	17763	            123693.607620793	1.17363793169334
+1650	17740	            122735.113818142	1.17476339566638
+1675	17710	            121851.121689103	1.17580233640169
+1700	17674	            120980.436456421	1.17682653594555
+1725	17627	            120132.222454086	1.17782516015531
+1750	17603	            119289.956220439	1.17881762041606
+1775	17546	            118454.545922064	1.17980282826515
+1800	17521	            117649.239557029	1.18075331365684
+1825	17467	            116869.53038169   1.18167431685997
+1850	17471	            116053.654302351	1.18263881006864
+1875	17412	            115330.053205305	1.18349487849768
+1900	17385	            114552.455679654	1.18441551908436
+1925	17369	            113778.709555226	1.18533231063818
+1950	17337	            113096.156271963	1.1861416392721
+1975	17313	            112289.471381868	1.18709886784902
+2000	17273	            111583.514623956	1.18793720419687
+2025	17261	            110850.690278741	1.18880807255849
+2050	17227	            110191.447062156	1.18959204460188
+2075	17213	            109505.443846873	1.19040838854462
+2100	17182	            108865.040714341	1.19117097396062
+2125	17164	            108199.382184852	1.19196415104277
+2150	17128	            107523.67746644   1.19276983901674
+2175	17126	            106867.031188575	1.19355332410001
+2200	17088	            106244.538927161	1.19429653310478
+2225	17077	            105594.415925271	1.19507322519737
+2250	17051	            104985.814776922	1.19580076950428
+2275	17030	            104381.270590074	1.196523902469
+2300	17013	            103787.713632661	1.19723431837131
+2325	17000           	103186.76262013   1.19795401377636
+2350	16988	            102584.916679249	1.19867521454102
+2375	16971	            102006.225325126	1.19936907827118
+2400	16958	            101427.458827433	1.20006343382754
+2425	16956	            100836.754571924	1.20077252581599
+2450	16926	            100298.222749736	1.20141935418555
+2475	16909            	99755.5035585738	1.20207156449321
+2500	16907            	99192.8654229987	1.20274808609767
+2525	16896            	98655.418294952   1.20339467333997
+2550	16887            	98097.4766452995	1.20406628469174
+2575	16868            	97566.4123566103	1.20470589111779
+2600	16858            	97072.1528330756	1.20530147565208
+2625	16853            	96536.6510828473	1.2059470895501
+2650	16858            	95992.3009202733	1.20660372574815
+2675	16845            	95467.9718243821	1.20723654907811
+2700	16820            	94964.7839866056	1.2078441686875
+2725	16793            	94487.7066280124	1.20842054126932
+2750	16801            	93980.8507047699	1.20903319162804
+2775	16789            	93509.1764426578	1.20960359597852
+2800	16791            	93015.1216141407	1.2102013541262
+2825	16778            	92537.4561768223	1.2107795635696
+2850	16768            	92061.5690483266	1.21135589510285
+2875	16768            	91590.5833743878	1.21192656075261
+2900	16753            	91131.3681070812	1.21248322373645
+2925	16748            	90672.4377084654	1.21303979685003
+2950	16752            	90183.3108294872	1.21363327235051
+2975	16733            	89735.76351802	  1.21417655222131
+3000	16728            	89280.444008276	  1.21472951637194
+3025	16714            	88852.8693757167	1.21524901495286
+3050	16724            	88358.2517943032	1.2158502471592
+3075	16715            	87941.5334686144	1.21635701982188
+3100	16701            	87502.5893051532	1.21689104983252
+3125	16693            	87063.1626400143	1.21742590171387
+3150	16693            	86647.0771247553	1.21793256039683
+3175	16685            	86231.3301764405	1.21843901741376
+3200	16674            	85818.5826131649	1.21894202895044
+3225	16675            	85387.7888850745	1.21946725465527
+3250	16665            	84958.3819144737	1.21999101483993
+3275	16663            	84540.2618210884	1.22050122425395
+3300	16663            	84122.3865457702	1.22101134811571
+3325	16653            	83730.9561269582	1.22148938265161
+3350	16646            	83333.0326381602	1.22197553868832
+3375	16653            	82916.8942091602	1.22248415548942
+3400	16633            	82532.2086046285	1.22295451801085
+3425	16635            	82130.4315378522	1.22344597181072
+3450	16628            	81736.6513879585	1.22392783541682
+3475	16632            	81345.196880411	  1.22440704127244
+3500	16622            	80956.8606544952	1.22488261521715
+3525	16613            	80583.4089250125	1.22534013517371
+3550	16613             80189.8980658904	1.22582241470791
+3575	16612             79819.1934829525	1.22627691693273
+3600	16602             79446.6565818834	1.22673383543944
+3625	16592             79088.9928001987	1.22717267217547
+3650	16589             78736.1831392169	1.22760570693483
+3675	16589             78364.0554479079	1.22806261802175
+3700	16589             78001.5029664355	1.22850793589199
+3725	16583             77608.1112562635	1.22899131580244
+3750	16578             77256.9331673483	1.22942298641621
+3775	16571             76914.8946091207	1.22984356840547
+3800	16574             76566.141043321	  1.23027255553637
+3825	16567             76221.8673878183	1.23069617888333
+3850	16569             75864.7464802333	1.23113576470767
+3875	16569             75507.5540437524	1.23157559563856
+3900	16560             75170.1816482745	1.23199116534441
+3925	16557             74824.2628054085	1.23241740802118
+3950	16553             74488.9483264192	1.23283072471391
+3975	16545             74160.129884749	  1.23323616884676
+4000	16543             73827.4653806513	1.23364649099132
+4025	16540             73497.3481022922	1.23405380624059
+4050	16547             73166.1486912294	1.23446259182547
+4075	16540             72821.3695521539	1.23488828215546
+4100	16547             72489.5112563164	1.23529815808293
+4125	16531             72175.6436341471	1.23568593903123
+4150	16536             71842.6669364168	1.23609746216465
+4175	16532             71524.5414407421	1.23649075883803
+4200	16530             71192.8605508156	1.23690094721537
+4225	16528             70875.3669971951	1.23729371764032
+4250	16526             70559.2461484252	1.23768491380989
+4275	16527             70248.5290854519	1.23806954338359
+4300	16526             69928.3799403668	1.2384659737445
+4325	16529             69619.9668745839	1.23884799173897
+4350	16519             69324.6264482164	1.23921392766823
+4375	16515             69010.0458904674	1.23960382160008
+4400	16517             68682.9422388009	1.24000936686079
+4425	16519             68379.4163283519	1.24038579895839
+4450	16517             68075.0155740242	1.24076343080405
+4475	16511             67771.3806058016	1.24114022717031
+4500	16515             67466.9505524896	1.24151812507466
+4525	16510             67169.6672982993	1.24188726248949
+4550	16512             66867.1951814011	1.2422629555742
+4575	16513             66568.8638405139	1.24263361683465
+4600	16510             66294.3224337266	1.24297481805073
+4625	16506             66002.3677363427	1.2433377633668
+4650	16498             65721.5986419739	1.24368690319616
+4675	16505             65418.5654367644	1.24406383873382
+4700	16502             65129.1432487209	1.24442395052175
+4725	16495             64837.3045091885	1.24478717463777
+4750	16492             64569.0946368629	1.2451210836238
+4775	16493             64278.2522048561	1.24548327033498
+4800	16502             63987.1164345227	1.24584592785505
+4825	16490             63714.4304579328	1.24618569889186
+4850	16489             63432.0501226029	1.24653764691666
+4875	16485             63160.2285979002	1.24687652873604
+4900	16484             62882.7269660525	1.24722258702113
+4925	16486             62608.0878938585	1.24756517011645
+4950	16486             62327.2843928358	1.24791553997421
+4975	16484             62068.1677503133	1.24823893755611
+
 ```
 
 ### Contraction events — the headline evidence
@@ -234,22 +594,42 @@ WHERE a.run_id = 1
 ORDER BY a.timestep;
 ```
 ```
-(paste result here)
+timestep  black_hole_count  total_matter      scale_factor      delta_a
+69	      16305	            244339.782644656	1.04025106544711	-0.000195615067465571
+70	      15872	            244595.044558141	1.03998556285743	-0.000265502589679611
+71	      15406	            244875.649309118	1.03969377890744	-0.000291783949989854
+72	      15005	            245107.663237322	1.0394525834511	  -0.000241195456338161
+73	      14571	            245363.261918196	1.03918693469312	-0.00026564875797952
+74	      14131	            245622.714404359	1.03891735003305	-0.000269584660076205
+75	      13759	            245828.357253629	1.0387037260749	  -0.000213623958144282
+76	      13412	            246010.544074098	1.03851450518294	-0.000189220891962716
+77	      13104	            246152.735141332	1.03836684819511	-0.000147656987828926
+78	      12815	            246281.098530751	1.03823356846132	-0.000133279733792513
+79	      12575	            246352.254516828	1.03815969455629	-7.38739050261117e-05
+80	      12399	            246359.006316145	1.03815268513404	-7.00942225306811e-06
+81	      12193	            246379.550735723	1.03813135710878	-2.13280252632231e-05
+154	      10804	            238013.549937194	1.04685279578508	-4.13986141567513e-06
+155	      10656	            238020.187774503	1.0468458469696	  -6.94881548279902e-06
+156	      10496	            238026.184149418	1.04683956970824	-6.2772613556028e-06
+157	      10339	            238032.912719351	1.04683252599869	-7.04370955650901e-06
+160	      9927	            237968.453100134	1.04690000659956	-1.18590026341181e-05
+162	      9629	            237937.964890694	1.04693192519279	-1.55024632952916e-06
 ```
 _(For just the deepest contractions, swap the final line for `ORDER BY delta_a ASC LIMIT 20;`)_
 
 ### Key numbers
 ```sql
 SELECT
-  (SELECT MAX(black_hole_count) FROM timestep_summary WHERE run_id=1)                            AS peak_bh,
+  (SELECT MAX(black_hole_count) FROM timestep_summary WHERE run_id=1)                              AS peak_bh,
   (SELECT timestep    FROM timestep_summary WHERE run_id=1 ORDER BY black_hole_count DESC LIMIT 1) AS peak_bh_step,
   (SELECT total_matter FROM timestep_summary WHERE run_id=1 ORDER BY timestep ASC  LIMIT 1)        AS matter_first,
   (SELECT total_matter FROM timestep_summary WHERE run_id=1 ORDER BY timestep DESC LIMIT 1)        AS matter_last,
   (SELECT black_hole_count FROM timestep_summary WHERE run_id=1 ORDER BY timestep DESC LIMIT 1)    AS bh_last,
-  (SELECT scale_factor FROM timestep_summary WHERE run_id=1 ORDER BY timestep DESC LIMIT 1)    AS a_last;
+  (SELECT scale_factor FROM timestep_summary WHERE run_id=1 ORDER BY timestep DESC LIMIT 1)        AS a_last;
 ```
 ```
-(paste result here)
+peak_bh peak_bh_step matter_first     matter_last       bh_last   a_last
+19792   628	         254876.750173958 61822.6611639176	16478     1.24854542605761
 ```
 ---
 

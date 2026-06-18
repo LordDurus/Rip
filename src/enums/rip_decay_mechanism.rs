@@ -1,4 +1,4 @@
-use crate::AppSettings;
+use crate::AppSetting;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -31,7 +31,7 @@ pub enum RipDecayMechanism {
 impl RipDecayMechanism {
     /// Build from settings. Panics if the chosen mechanism's required params are missing
     /// — this is a startup-time configuration error.
-    pub fn from_settings(settings: &AppSettings) -> Self {
+    pub fn from_settings(settings: &AppSetting) -> Self {
         match settings.rip_decay_mechanism.to_lowercase().as_str() {
             "none" => Self::None,
 

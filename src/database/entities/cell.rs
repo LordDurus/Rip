@@ -47,6 +47,10 @@ pub struct Cell {
     /// draw. Most SMBHs get a near-zero value (they stall); a rare few get a strong
     /// connection and run away to overmassive scale. Zero for non-SMBH cells.
     pub smbh_connection_strength: f64,
+    /// True if this cell contains a star.
+    pub is_star: bool,
+    /// ID of the galaxy this cell belongs to.
+    pub galaxy_id: i64,
 }
 
 impl Cell {
@@ -73,6 +77,8 @@ impl Cell {
             volume: 1.0,
             is_rip_induced: false,
             smbh_connection_strength: 0.0,
+            is_star: false,
+            galaxy_id: 0,
         }
     }
 }
