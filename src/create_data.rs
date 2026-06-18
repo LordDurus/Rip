@@ -5,10 +5,10 @@ use crate::database::entities::structure_particle::StructureParticle;
 use crate::enums::log_level::LogLevel;
 use crate::enums::rip_decay_mechanism::RipDecayMechanism;
 use crate::enums::smbh_connection_mode::SmbhConnectionMode;
-use crate::galaxy::{Galaxy, update_all_galaxies};
+use crate::galaxy::{Galaxy, apply_smbh_competition, build_membership, find_galaxies};
 use crate::gravity::compute_gravity_fft;
 use crate::helpers::black_hole::{revert_black_hole, set_as_black_hole};
-use crate::helpers::grid::{apply_galaxy_overdensity, populate_grid, seed_initial_curvature};
+use crate::helpers::grid::{populate_grid, seed_initial_curvature};
 use crate::helpers::particle::{apply_gravity_to_particle, initialize_particles, map_particle_to_cell};
 use crate::helpers::rip::compute_cell_rip_strength;
 use crate::helpers::transport::apply_matter_transport;
@@ -75,7 +75,12 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
 
         let mut galaxies = seed_initial_curvature(&mut grid, &app_settings, db);
         Galaxy::assign_run_id(&mut galaxies, run.run_id);
-        let mut _galaxy_next_id: i64 = -((galaxies.len() as i64) + 1);
+        // Galaxies are found dynamically each post-inflation timestep, not seeded.
+        // `galaxies` starts empty (seed_initial_curvature returns an empty Vec).
+        // prev_membership carries cell->galaxy_id from the prior step for identity
+        // matching; galaxy_next_id hands out fresh positive ids for new galaxies.
+        let mut prev_membership: std::collections::HashMap<(usize, usize, usize), i64> = std::collections::HashMap::new();
+        let mut galaxy_next_id: i64 = 0;
 
         let num_particles = app_settings.structure_num_particles;
         let mut positions = vec![(0.0, 0.0, 0.0); num_particles];
@@ -89,9 +94,8 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
             return Err(err.into());
         }
 
-        // Apply galaxy overdensity boosts as a separate pass after base geometry.
-        // Keeps populate_grid single-responsibility (base geometry only).
-        apply_galaxy_overdensity(&mut grid, &galaxies, &app_settings);
+        // Galaxy overdensity seeding removed: galaxies emerge from the density
+        // field via friends-of-friends after inflation, not from init-time stamps.
 
         // Compute initial total matter as baseline for expansion calculation
         // Start "maximally unstable" so star formation is blocked until the first
@@ -176,11 +180,23 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                 break;
             }
 
-            // ── Galaxy update pass ──
-            // Runs BEFORE the cell update so SMBH formation uses current galaxy radii.
-            // NOTE: discover_new disabled (O(grid × galaxy_count)) until spatial indexing added.
-            // Single-pass: stats, centroids, radii, SMBH cap, cell tagging.
-            update_all_galaxies(&mut galaxies, &mut grid, &app_settings);
+            // ── Galaxy finding pass ──
+            // Galaxies are found fresh from the density field each timestep via
+            // friends-of-friends, but only AFTER inflation settles — during the
+            // violent early epoch matter can't bind into galaxies. We reuse the
+            // star-formation stability signal: the previous step's matter_delta
+            // below the threshold means the universe has calmed enough.
+            //
+            // SMBH formation is NOT gated here — it's exogenous (parent feed) and
+            // handled in the cell update regardless of galaxy state.
+            //
+            // Runs BEFORE the cell update so the cell pass sees current galaxy tags.
+            let galaxies_allowed = previous_matter_delta.abs() < app_settings.star_formation_max_matter_delta;
+            if galaxies_allowed {
+                galaxies = find_galaxies(&mut grid, &prev_membership, &app_settings, timestep, run.run_id, &mut galaxy_next_id);
+                apply_smbh_competition(&galaxies, &mut grid, &app_settings);
+                prev_membership = build_membership(&grid);
+            }
 
             // Use previous timestep's matter_delta to gate star formation.
             // matter_delta for the current timestep isn't computed until after
@@ -210,7 +226,12 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                             // formation is favored (the JWST overmassive-early-BH regime).
                             let smbh_probability = app_settings.smbh_formation_probability * f64::exp(-(timestep as f64) / app_settings.smbh_early_bias);
                             let mut rng = rand::thread_rng();
-                            if cell.curvature > app_settings.smbh_curvature_threshold && rng.gen_range(0.0..1.0) < smbh_probability && galaxies.iter().any(|g| g.contains(height, width, depth)) {
+                            // No galaxy gating: SMBHs are exogenous — seeded by a
+                            // feeding black hole in the parent universe, which we do
+                            // not model and cannot time. They may form anywhere, any
+                            // time (including during/before inflation). Galaxies later
+                            // condense around the wells these seeds leave behind.
+                            if cell.curvature > app_settings.smbh_curvature_threshold && rng.gen_range(0.0..1.0) < smbh_probability {
                                 set_as_black_hole(cell, &next_black_hole_id);
                                 cell.is_supermassive = true;
                                 cell.is_rip_induced = false;
@@ -320,7 +341,8 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                         } else {
                             // Cells inside a galaxy get partial drain protection —
                             // galaxy structure resists rip-driven matter loss.
-                            // galaxy_id > 0 means tagged by update_all_galaxies this timestep.
+                            // galaxy_id > 0 when find_galaxies tagged this cell
+                            // as a galaxy member this timestep (0 = no galaxy).
                             let drain_factor = if cell.galaxy_id > 0 { 0.1 } else { 1.0 };
                             let drain = app_settings.rip_drain_rate * cell.rip_strength * cell.matter_density * drain_factor;
                             cell.matter_density = (cell.matter_density - drain).max(0.0);

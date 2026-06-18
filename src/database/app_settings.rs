@@ -144,16 +144,21 @@ pub struct AppSetting {
     /// Burned matter stays in the cell as diffuse gas — does not leave the grid,
     /// so galaxy matter budget is unchanged.
     pub star_burn_rate: f64,
+
     /// Number of galaxy regions to stamp into the grid at initialisation.
-    pub galaxy_count: usize,
+    // pub galaxy_count: usize,
+
     /// Influence radius of each galaxy region, in cells.
-    pub galaxy_radius: f64,
+    // pub galaxy_radius: f64,
+
     /// Multiplicative matter-density boost applied to cells inside a galaxy region.
     /// e.g. 3.0 → cells inside start with 3× the base geometry density.
-    pub galaxy_overdensity: f64,
+    // pub galaxy_overdensity: f64,
+
     /// Additive curvature bonus applied to cells inside a galaxy region at seed time.
     /// Raises the local curvature floor so SMBH formation threshold is reachable there.
-    pub galaxy_curvature_boost: f64,
+    // pub galaxy_curvature_boost: f64,
+
     /// Matter density a cell must reach for a new galaxy to form.
     pub galaxy_formation_density_threshold: f64,
     /// Matter density threshold for a cell to be absorbed into an existing galaxy.
@@ -176,6 +181,14 @@ pub struct AppSetting {
     /// into its galaxy's dominant SMBH.
     /// share = smbh_connection_strength / galaxy's total smbh connection strength
     pub galaxy_smbh_stall_share_threshold: f64,
+    /// FoF linking density: a non-BH cell links into a galaxy when its
+    /// matter_density >= this. Set above filament density so galaxies are the
+    /// dense nodes, not the threads. The critical knob for galaxy_count.
+    pub galaxy_fof_density_threshold: f64,
+    /// Minimum linked-cell count for a component to count as a galaxy (noise filter).
+    pub galaxy_min_cells: usize,
+    /// Minimum overlap fraction for a found component to inherit a prior galaxy's id.
+    pub galaxy_match_min_overlap: f64,
 }
 
 impl AppSetting {
@@ -195,7 +208,7 @@ impl AppSetting {
                         return Err(rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)));
                     }
                 },
-                "int" | "i64" => val
+                "int" | "i64" | "usize" | "u64" => val
                     .parse::<i64>()
                     .map(AppValue::Int)
                     .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))),
@@ -333,16 +346,19 @@ impl AppSetting {
             star_extinction_threshold: get_f64("STAR_EXTINCTION_THRESHOLD"),
             star_burn_rate: get_f64("STAR_BURN_RATE"),
             star_formation_max_matter_delta: get_f64("STAR_FORMATION_MAX_MATTER_DELTA"),
-            galaxy_count: get_usize("GALAXY_COUNT"),
-            galaxy_radius: get_f64("GALAXY_RADIUS"),
-            galaxy_overdensity: get_f64("GALAXY_OVERDENSITY"),
-            galaxy_curvature_boost: get_f64("GALAXY_CURVATURE_BOOST"),
+            // galaxy_count: get_usize("GALAXY_COUNT"),
+            // galaxy_radius: get_f64("GALAXY_RADIUS"),
+            // galaxy_overdensity: get_f64("GALAXY_OVERDENSITY"),
+            // galaxy_curvature_boost: get_f64("GALAXY_CURVATURE_BOOST"),
             galaxy_formation_density_threshold: get_f64("GALAXY_FORMATION_DENSITY_THRESHOLD"),
             galaxy_capture_density_threshold: get_f64("GALAXY_CAPTURE_DENSITY_THRESHOLD"),
             galaxy_mass_growth_rate: get_f64("GALAXY_MASS_GROWTH_RATE"),
             galaxy_smbh_mass_fraction_cap: get_f64("GALAXY_SMBH_MASS_FRACTION_CAP"),
             galaxy_merge_overlap_fraction: get_f64("GALAXY_MERGE_OVERLAP_FRACTION"),
             galaxy_smbh_stall_share_threshold: get_f64("GALAXY_SMBH_STALL_SHARE_THRESHOLD"),
+            galaxy_fof_density_threshold: get_f64("GALAXY_FOF_DENSITY_THRESHOLD"),
+            galaxy_min_cells: get_usize("GALAXY_MIN_CELLS"),
+            galaxy_match_min_overlap: get_f64("GALAXY_MATCH_MIN_OVERLAP"),
         }
     }
 
