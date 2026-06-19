@@ -6,4 +6,4 @@ if %ERRORLEVEL% neq 0 (
     echo Cargo run failed with error %ERRORLEVEL% -- skipping plots.
     exit /b %ERRORLEVEL%
 )
-plot.bat
+rem plot.bat

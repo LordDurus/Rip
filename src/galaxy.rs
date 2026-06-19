@@ -361,7 +361,9 @@ pub fn apply_smbh_competition(galaxies: &[Galaxy], grid: &mut [Vec<Vec<Cell>>], 
 
     // Per-galaxy accumulators, indexed by position in `galaxies`.
     let mut total_mass = vec![0.0_f64; n];
-    let mut smbh_mass = vec![0.0_f64; n];
+    // Accumulated per galaxy but no longer used in the cap denominator (see the
+    // double-subtraction fix below). Kept for potential future diagnostics.
+    let mut _smbh_mass = vec![0.0_f64; n];
     let mut connection_strength_sum = vec![0.0_f64; n];
 
     let mut id_to_index: HashMap<i64, usize> = HashMap::new();
@@ -376,7 +378,7 @@ pub fn apply_smbh_competition(galaxies: &[Galaxy], grid: &mut [Vec<Vec<Cell>>], 
             for cell in row_cells.iter() {
                 if cell.is_black_hole && cell.is_supermassive && cell.galaxy_id != 0 {
                     if let Some(&i) = id_to_index.get(&cell.galaxy_id) {
-                        smbh_mass[i] += cell.matter_density;
+                        _smbh_mass[i] += cell.matter_density;
                         connection_strength_sum[i] += cell.smbh_connection_strength;
                     }
                 }
@@ -394,7 +396,13 @@ pub fn apply_smbh_competition(galaxies: &[Galaxy], grid: &mut [Vec<Vec<Cell>>], 
                 let Some(&i) = id_to_index.get(&cell.galaxy_id) else {
                     continue;
                 };
-                let baryonic_mass = (total_mass[i] - smbh_mass[i]).max(0.0);
+                // total_mass[i] is ALREADY baryonic: find_galaxies accumulates it
+                // from non-BH cells only (BH mass goes to smbh_mass separately).
+                // Subtracting smbh_mass here would be a double-subtraction that
+                // drives the cap denominator to zero as an SMBH grows — removing
+                // its own cap and producing runaway growth. The budget must be
+                // independent of the thing being capped.
+                let baryonic_mass = total_mass[i].max(0.0);
                 if baryonic_mass <= 0.0 {
                     continue;
                 }

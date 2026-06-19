@@ -122,6 +122,76 @@ from the first timestep.
 
 ---
 
+### The SMBH competition cap denominator must exclude SMBH mass — double-subtraction caused runaway (galaxy-phase2)
+**Finding:** The competitive SMBH cap computes a per-galaxy baryonic budget, then
+splits it by connection-strength share. The budget was being computed as
+`total_mass[i] - smbh_mass[i]`. But `find_galaxies` already accumulates `total_mass`
+from non-BH cells only — SMBH mass is tracked separately in `smbh_mass` and never
+added to `total_mass`. So subtracting `smbh_mass` was a *second* subtraction of a
+quantity that was never in the sum.
+
+**Why it ran away:** As an SMBH grew, `smbh_mass[i]` grew, so the denominator
+`total_mass[i] - smbh_mass[i]` shrank toward zero. Once `smbh_mass >= total_mass`,
+the budget clamped to zero and hit the `baryonic_mass <= 0.0 { continue }` guard —
+which *skips the cap entirely*. The result was a self-reinforcing loop: the bigger
+an in-galaxy SMBH got, the more it suppressed its own budget, the more completely
+it escaped the cap. The largest SMBHs were precisely the uncapped ones. In-galaxy
+max mass climbed 10^10 → 10^11 → 10^16 and drove `gravity_magnitude_avg` to ~10^28.
+
+**Fix:** `let baryonic_mass = total_mass[i].max(0.0);` — `total_mass` is already the
+baryonic budget. One line.
+
+**Consequence:** After the fix, in-galaxy max SMBH mass stays bounded (~10^1–10^2,
+with transient excursions to 10^3–10^6 in newly-formed or just-merged galaxies that
+relax back). `gravity_magnitude_avg` returned to sane values; the inflation
+expansion-rate curve became clean. The SMBH mass function lost its 10^16 tail and
+now tops out near 10^5–10^6 — still heavy-tailed (consistent with the JWST
+overmassive regime) but no longer unbounded.
+
+**Principle reinforced:** This is the third instance of the same bug class — a
+quantity whose growth weakens its own constraint (cf. the rip drain rate, the
+phantom `apply_gravity_interaction` additive feedback). The cap denominator must be
+*independent of the thing being capped*. Guard against any cap whose budget shrinks
+as the capped quantity grows.
+
+---
+
+### Orphan SMBHs are self-limiting, not a runaway — treated as an emergent feature (galaxy-phase2)
+**Finding:** Because SMBH formation is exogenous (decoupled from galaxies), ~95% of
+SMBHs form outside any FoF galaxy (`galaxy_id == 0`) and are structurally invisible
+to the competition cap, which only acts on in-galaxy SMBHs. A diagnostic instrument
+measured the in-galaxy/orphan split and the max mass of each population per 100
+timesteps over a full 5000-step run.
+
+**What the data showed:** Orphan max mass climbs to ~10^6 by t≈1600, then *wanders
+around a few ×10^6 for the remaining 3400 timesteps* (1e6, 2e6, 3.9e6, 7e5, 3.4e6 —
+fluctuating, not climbing). This is bounded equilibrium, not geometric runaway. A
+true runaway adds orders of magnitude per decade of time (cf. the in-galaxy bug
+above: 10^10 → 10^16). Orphans do not.
+
+**Interpretation:** Orphan growth self-limits because it is tied to local conditions
+(`SMBH_CONNECTION_MODE = tied_to_curvature`). An orphan sits in a drained void with
+low local curvature, so its growth rate falls as its surroundings thin. The cap
+(for in-galaxy SMBHs) and local-curvature coupling (for orphans) are two distinct
+bounding mechanisms — both bounded, at different ceilings. The in-galaxy ceiling is
+low (a fraction of host baryonic budget); the orphan ceiling is higher (~10^6) but
+stable.
+
+**Decision:** No orphan-specific brake is added. The rising orphan fraction over
+time — as galaxies merge away (count 312 → ~12) and their SMBHs are widowed — is
+read as a *prediction* of the matter-loss framework: SMBHs increasingly dominate
+over thinning baryonic surroundings as structure dissolves at late times. Adding an
+explicit orphan cap would be engineering an answer where the existing uniform rules
+already produce a bounded one.
+
+**Gate condition for revisiting:** If a 10000-step run shows `max_orphan_mass`
+climbing past ~10^7 rather than holding near 10^6, the self-limiting read is wrong
+and orphan growth has an unbounded source (e.g. connection strength frozen at
+formation rather than recomputed against current local curvature). Check whether
+`smbh_connection_strength` updates over time before adding any brake.
+
+---
+
 ### Stalled SMBHs merge into the galaxy's dominant hole
 **Decision:** An SMBH whose competitive share falls below
 `galaxy_smbh_stall_share_threshold` is merged into its galaxy's most massive SMBH.
