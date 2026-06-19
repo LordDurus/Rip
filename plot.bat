@@ -17,7 +17,6 @@ echo Running plots for run_id=%run_id%, timestep=%timestep%
 
 del /q output\*.png 2>nul
 del /q output\*.html 2>nul
-cls
 
 cd scripts
 py generate_flowchart.py
