@@ -39,12 +39,21 @@ A running list of hypotheses and directions to investigate once the core simulat
 
 **Why it's interesting:** Directly addresses the black hole information paradox, but generalized: any information apparently lost to a rip is preserved on the boundary/geometric structure rather than destroyed. Fits naturally with the universe-inside-a-black-hole picture, since the holographic principle is already how information is thought to be preserved on black hole horizons.
 
+**Connection to the Hawking information paradox:**
+Hawking's original result was that black holes emit thermal (random) radiation as they evaporate, which would mean quantum information about infalling matter is permanently destroyed — a violation of unitarity. This became one of the deepest problems in theoretical physics. Hawking eventually moved toward preservation: his 2016 "soft hair" paper (with Perry and Strominger) proposed that infalling particles leave imprints on the horizon itself, encoding information in subtle gravitational and electromagnetic field configurations.
+
+Rip sidesteps the paradox structurally rather than patching it. In standard GR, the black hole interior terminates at a singularity — there's nowhere for the information to go, so either it's destroyed (Hawking's original position) or it has to escape via the radiation (the holographic rescue). In Rip, the interior *is a functioning child geometry* where matter continues to evolve. Information isn't lost; it relocates across a geometric phase boundary. The paradox only exists if there's nowhere for the information to go. Rip gives it somewhere.
+
+This also reframes what holographic imprinting means. In standard black hole physics, the horizon encodes information as a kind of emergency backup. In Rip, the rip boundary is a genuine interface between two real spaces — the imprinting isn't a rescue mechanism, it's a natural consequence of matter crossing a phase boundary where both sides are real.
+
 **Things to think through when revisiting:**
 - What's the boundary in this picture? The cosmological horizon? The parent black hole's horizon? The rips themselves?
 - Does the simulation actually produce a holographic encoding, or is that an interpretation laid on top?
 - How does information get *out* (or does it)? Is it accessible in principle, or only preserved in a formal sense?
 - Connection to AdS/CFT and existing holographic frameworks — does this fit, extend, or conflict?
 - If rips store information holographically, does that constrain what rips can do or where they can form?
+- **Testable discriminator:** Does the parent-side cell retain any residual signature when matter crosses a rip threshold — a curvature imprint, a field perturbation, anything — or does it simply lose mass and nothing else? If there's a residual, that's a holographic imprint in the simulation itself. If there isn't, the information is genuinely transferred to the child geometry with no boundary record. Both are physically interesting but predict different things about what an observer near a rip boundary would measure.
+- The "soft hair" result is suggestive: if horizon imprints are real in standard GR, the rip boundary should carry analogous structure. What would soft hair look like on a rip boundary in this model?
 
 ---
 
@@ -259,3 +268,21 @@ SMBH branch (overmassive early holes) and the planned galaxy branch (galaxies ar
 
 **Status.** Idea only. Sequenced after SMBHs; pairs with the galaxy branch. Low modeling cost — it
 reuses existing thresholds and the accretion/drain loop, adding an ignition band and a burn term.
+---
+
+## Mass as bound energy — implications for rip boundary accounting
+
+**Context:** A spinning black hole losing angular momentum via Hawking radiation necessarily loses mass, because angular momentum carries energy and E=mc² means energy and mass are the same thing. This is not a special case — it's the general rule. Mass is bound energy at rest. A hot object is heavier than a cold one. A compressed spring is heavier than a relaxed one. Binding energy in a nucleus contributes to the mass of the atom.
+
+The full relativistic relation is E² = (mc²)² + (pc)², which collapses to E=mc² for a particle at rest and E=pc for a massless photon. Photons have no rest mass but do carry energy, and therefore gravitate — they bend spacetime and appear in the stress-energy tensor.
+
+**Why it matters for Rip (eventually).** Currently Rip tracks matter density as a proxy for mass, which is correct in spirit. But the physical reality is that what crosses a rip threshold is bound energy in all its forms — rest mass, thermal energy, kinetic energy of bulk flow, gravitational binding energy. If cells ever acquire internal energy states (temperature, bulk velocity, pressure), those contributions would need to be included in the mass that transfers across the boundary, not just the rest-mass density.
+
+**The spin-down case specifically.** If Rip ever models rotating SMBHs (Kerr geometry rather than Schwarzschild), the spin is not a free parameter independent of mass — it's part of the hole's total energy budget. A hole that loses spin loses mass. Any mechanism that bleeds angular momentum (radiation, frame-dragging interactions, mergers) is simultaneously a mass-loss mechanism. The two can't be tracked independently without violating energy conservation.
+
+**Things to think through when revisiting:**
+- If cells carry a spin/angular-momentum field, does the rip threshold depend on total energy (rest + rotational) or just rest-mass density? The threshold is currently density-based; in a full Kerr picture it would be energy-density-based, which are the same thing until rotation becomes significant.
+- Does angular momentum transfer across the rip boundary along with mass? If so, what does that imply for the spin distribution of SMBHs in the child geometry?
+- Hawking radiation from a Kerr hole preferentially carries away angular momentum before mass — the hole spins down first, then shrinks. Is there an analog in Rip where a near-threshold cell bleeds rotational energy before crossing?
+
+**Status.** No implementation needed now. Flag here for when internal energy states or SMBH spin are introduced.

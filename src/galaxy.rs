@@ -1,4 +1,5 @@
 use crate::database::app_settings::AppSetting;
+use crate::database::db_provider::DbProvider;
 use crate::database::entities::cell::Cell;
 use std::collections::HashMap;
 
@@ -115,9 +116,13 @@ impl UnionFind {
 ///
 /// `prev_galaxies` is last timestep's result (for identity). `prev_membership`
 /// maps a (col,row,layer) to the galaxy_id it held last timestep, used for
-/// overlap matching. Returns the new galaxy list; `next_id` advances for any
-/// newly-formed galaxies.
-pub fn find_galaxies(grid: &mut [Vec<Vec<Cell>>], prev_membership: &HashMap<(usize, usize, usize), i64>, app_settings: &AppSetting, timestep: usize, run_id: i64, next_id: &mut i64) -> Vec<Galaxy> {
+/// overlap matching. Returns the new galaxy list. Newly-born galaxies (no overlap
+/// match) get a NEGATIVE sentinel id (-1, -2, ...). The caller persists them via
+/// insert_galaxies, which swaps each sentinel for a real positive DB rowid, then
+/// re-tags the grid before build_membership runs. The galaxy table's autoincrement
+/// is the single source of truth for ids — there is no in-memory counter to seed
+/// or keep in sync across runs.
+pub fn find_galaxies(grid: &mut [Vec<Vec<Cell>>], prev_membership: &HashMap<(usize, usize, usize), i64>, app_settings: &AppSetting, timestep: usize, run_id: i64) -> Vec<Galaxy> {
     let height = grid.len();
     let width = if height > 0 { grid[0].len() } else { 0 };
     let depth = if width > 0 { grid[0][0].len() } else { 0 };
@@ -251,6 +256,12 @@ pub fn find_galaxies(grid: &mut [Vec<Vec<Cell>>], prev_membership: &HashMap<(usi
     // (consistent with "larger galaxy keeps its identity through a merge").
     components.sort_by(|a, b| b.total_mass.partial_cmp(&a.total_mass).unwrap_or(std::cmp::Ordering::Equal));
 
+    // Newly-born galaxies get a negative sentinel id, assigned here and replaced
+    // with a real positive DB rowid by the caller's insert_galaxies pass. Negative
+    // ids never collide with positive DB rowids, so a sentinel that leaks into the
+    // DB or membership map is an obvious, fail-loud bug.
+    let mut next_sentinel: i64 = -1;
+
     for comp in &components {
         // Tally overlap with prior galaxy ids.
         let mut overlap: HashMap<i64, usize> = HashMap::new();
@@ -280,8 +291,9 @@ pub fn find_galaxies(grid: &mut [Vec<Vec<Cell>>], prev_membership: &HashMap<(usi
         let resolved_id = match best_id {
             Some(pid) => pid,
             None => {
-                *next_id += 1;
-                *next_id
+                let id = next_sentinel;
+                next_sentinel -= 1;
+                id
             }
         };
 
@@ -343,6 +355,84 @@ pub fn build_membership(grid: &[Vec<Vec<Cell>>]) -> HashMap<(usize, usize, usize
         }
     }
     m
+}
+
+/// Persist this timestep's galaxies to the DB and finalize their ids.
+///
+/// Must run AFTER find_galaxies (which assigns negative sentinel ids to newborns
+/// and tags member cells with them) and BEFORE build_membership (which only keeps
+/// positive ids, so sentinels must be resolved first or identity would be lost).
+///
+/// Steps:
+///   1. Count SMBHs per galaxy from the grid (single pass over BH cells).
+///   2. Insert newborns (negative id) in one transaction; the DB stamps real
+///      positive rowids back onto the structs.
+///   3. Re-tag grid cells that held a sentinel with the real id (single pass).
+///   4. Snapshot every active galaxy into galaxy_timestep (one transaction).
+///   5. Deactivate prior ids that no component carried forward (merged/dissolved).
+///
+/// `prev_ids` is the set of positive galaxy ids that existed last timestep, used
+/// to detect which galaxies vanished this step. Pass the keys/values of the prior
+/// membership map (deduplicated) — or simply the prior galaxy list's ids.
+pub fn persist_galaxies(db: &mut dyn DbProvider, galaxies: &mut [Galaxy], grid: &mut [Vec<Vec<Cell>>], prev_ids: &std::collections::HashSet<i64>, timestep: usize) -> Result<(), rusqlite::Error> {
+    // --- Step 1: per-galaxy SMBH counts, indexed to match `galaxies` ---
+    let mut id_to_index: HashMap<i64, usize> = HashMap::new();
+    for (i, g) in galaxies.iter().enumerate() {
+        id_to_index.insert(g.galaxy_id, i);
+    }
+    let mut smbh_counts = vec![0i64; galaxies.len()];
+    for col_cells in grid.iter() {
+        for row_cells in col_cells.iter() {
+            for cell in row_cells.iter() {
+                if cell.is_black_hole && cell.is_supermassive && cell.galaxy_id != 0 {
+                    if let Some(&i) = id_to_index.get(&cell.galaxy_id) {
+                        smbh_counts[i] += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    // --- Step 2: insert newborns (negative sentinel id), capture sentinel->real ---
+    // Record each newborn's sentinel before insert so we can remap grid tags after.
+    let mut sentinel_to_real: HashMap<i64, i64> = HashMap::new();
+    {
+        let mut newborn_refs: Vec<&mut Galaxy> = galaxies.iter_mut().filter(|g| g.galaxy_id < 0).collect();
+        // Stash sentinels in input order; insert_galaxies preserves order and stamps
+        // real ids back, so we can zip sentinel -> real afterwards.
+        let sentinels: Vec<i64> = newborn_refs.iter().map(|g| g.galaxy_id).collect();
+        db.insert_galaxies(&mut newborn_refs)?;
+        for (sentinel, g) in sentinels.iter().zip(newborn_refs.iter()) {
+            sentinel_to_real.insert(*sentinel, g.galaxy_id);
+        }
+    }
+
+    // --- Step 3: re-tag grid cells that still carry a sentinel ---
+    if !sentinel_to_real.is_empty() {
+        for col_cells in grid.iter_mut() {
+            for row_cells in col_cells.iter_mut() {
+                for cell in row_cells.iter_mut() {
+                    if cell.galaxy_id < 0 {
+                        if let Some(&real) = sentinel_to_real.get(&cell.galaxy_id) {
+                            cell.galaxy_id = real;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // --- Step 4: snapshot every active galaxy ---
+    db.record_galaxy_timesteps(galaxies, &smbh_counts, timestep)?;
+
+    // --- Step 5: deactivate prior ids not carried forward this step ---
+    let current_ids: std::collections::HashSet<i64> = galaxies.iter().map(|g| g.galaxy_id).collect();
+    let vanished: Vec<i64> = prev_ids.iter().filter(|id| !current_ids.contains(id)).copied().collect();
+    if !vanished.is_empty() {
+        db.deactivate_galaxies(&vanished)?;
+    }
+
+    Ok(())
 }
 
 /// Competitive SMBH cap and intra-galaxy SMBH merging.
@@ -453,17 +543,22 @@ pub fn apply_smbh_competition(galaxies: &[Galaxy], grid: &mut [Vec<Vec<Cell>>], 
                 let Some(&i) = id_to_index.get(&cell.galaxy_id) else {
                     continue;
                 };
-                if let Some((_, wc, wr, wl)) = winner[i] {
-                    if wc == col_idx && wr == row_idx && wl == layer_idx {
-                        continue;
-                    }
-                }
-                let share = if connection_strength_sum[i] > 0.0 {
-                    cell.smbh_connection_strength / connection_strength_sum[i]
-                } else {
-                    1.0
+                // The dominant (most massive) SMBH in this galaxy is never absorbed.
+                let Some((winner_mass, wc, wr, wl)) = winner[i] else {
+                    continue;
                 };
-                if share < app_settings.galaxy_smbh_stall_share_threshold {
+                if wc == col_idx && wr == row_idx && wl == layer_idx {
+                    continue;
+                }
+                // Mass-based dominance: absorb this SMBH if its mass is below the
+                // configured fraction of the dominant SMBH's mass. Comparable-mass
+                // pairs (post-merger duals) survive until one pulls ahead, giving
+                // emergent ≈one-dominant-per-galaxy with rare transient duals.
+                // Winner-selection and absorption now key off the SAME quantity
+                // (mass), unlike the prior connection-strength-share criterion,
+                // which let many comparable-strength SMBHs all survive.
+                let dominance_floor = winner_mass * app_settings.galaxy_smbh_dominance_threshold;
+                if cell.matter_density < dominance_floor {
                     absorbed_mass[i] += cell.matter_density;
                     cell.is_black_hole = false;
                     cell.is_supermassive = false;

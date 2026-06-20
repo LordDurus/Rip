@@ -235,6 +235,91 @@ impl DbProvider for SqliteProvider {
         Ok(())
     }
 
+    fn insert_galaxies(&mut self, galaxies: &mut [&mut Galaxy]) -> Result<()> {
+        if galaxies.is_empty() {
+            return Ok(());
+        }
+        let tx = self.conn.transaction()?;
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO galaxy (
+                    run_id, formed_timestep,
+                    centroid_col, centroid_row, centroid_layer,
+                    radius, total_mass, stellar_mass, smbh_mass,
+                    cell_count, is_active
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1)",
+            )?;
+            for galaxy in galaxies.iter_mut() {
+                stmt.execute(params![
+                    galaxy.run_id,
+                    galaxy.formed_timestep as i64,
+                    galaxy.centroid_col,
+                    galaxy.centroid_row,
+                    galaxy.centroid_layer,
+                    galaxy.radius,
+                    galaxy.total_mass,
+                    galaxy.stellar_mass,
+                    galaxy.smbh_mass,
+                    galaxy.cell_count as i64,
+                ])?;
+                // Stamp the real DB id back onto the struct, replacing the sentinel.
+                galaxy.galaxy_id = tx.last_insert_rowid();
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn record_galaxy_timesteps(&mut self, galaxies: &[Galaxy], counts: &[i64], timestep: usize) -> Result<()> {
+        if galaxies.is_empty() {
+            return Ok(());
+        }
+        let tx = self.conn.transaction()?;
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO galaxy_timestep (
+                    galaxy_id, timestep,
+                    total_mass, stellar_mass, smbh_mass,
+                    cell_count, smbh_count, radius,
+                    centroid_col, centroid_row, centroid_layer
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            )?;
+            for (i, galaxy) in galaxies.iter().enumerate() {
+                let smbh_count = counts.get(i).copied().unwrap_or(0);
+                stmt.execute(params![
+                    galaxy.galaxy_id,
+                    timestep as i64,
+                    galaxy.total_mass,
+                    galaxy.stellar_mass,
+                    galaxy.smbh_mass,
+                    galaxy.cell_count as i64,
+                    smbh_count,
+                    galaxy.radius,
+                    galaxy.centroid_col,
+                    galaxy.centroid_row,
+                    galaxy.centroid_layer,
+                ])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn deactivate_galaxies(&mut self, galaxy_ids: &[i64]) -> Result<()> {
+        if galaxy_ids.is_empty() {
+            return Ok(());
+        }
+        let tx = self.conn.transaction()?;
+        {
+            let mut stmt = tx.prepare("UPDATE galaxy SET is_active = 0 WHERE galaxy_id = ?1")?;
+            for &id in galaxy_ids {
+                stmt.execute(params![id])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     fn get_or_insert_cell_position(&mut self, col: usize, row: usize) -> CellPosition {
         let mut stmt = self
             .conn

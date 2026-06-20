@@ -156,6 +156,51 @@ as the capped quantity grows.
 
 ---
 
+### Emergent one-SMBH-per-galaxy via mass-dominance merge — threshold must beat the cap's mass-bunching (galaxy-phase2)
+**Goal:** Drive the in-galaxy SMBH population toward ~1 dominant per galaxy (the
+observed regime: ≈1, with rare transient post-merger duals), *emergently* from the
+competition dynamics rather than an enforced "delete all but one" rule.
+
+**Mechanism chosen.** The intra-galaxy merge (Pass 4 of `apply_smbh_competition`)
+selects a winner — the most massive SMBH in the galaxy region — and absorbs any
+non-winner whose mass falls below `galaxy_smbh_dominance_threshold × winner_mass`,
+conserving mass into the winner. Winner-selection and absorption now key off the
+SAME quantity (mass). The prior criterion absorbed on *connection-strength share*
+while selecting the winner by mass — two different quantities — so comparable-
+strength SMBHs all survived and galaxies kept hundreds.
+
+**The cap/merge interaction — why the threshold value matters.** Pass 3 (the cap)
+clamps every in-galaxy SMBH toward `baryonic_budget × share`, which *bunches* their
+masses together. Pass 4 then only absorbs SMBHs far below the winner. These work
+against each other: the cap makes everyone similar, so a low dominance threshold
+finds nothing to absorb. Measured directly:
+  - threshold 0.1 → avg SMBH/galaxy plateaued at ~2.4 (max 8). The cap bunches
+    masses within ~10×, so "under 10% of the max" almost never triggers.
+  - threshold 0.5 → avg SMBH/galaxy ≈1.0 across the whole run (max 2–3 early,
+    1 late). Absorbing anything under half the dominant mass beats the cap's
+    bunching and leaves a single winner plus rare near-equal duals.
+
+**Decision:** Use `GALAXY_SMBH_DOMINANCE_THRESHOLD = 0.5`. The threshold is not a
+free knob — it must exceed the mass spread the cap imposes, or the merge is inert.
+This is the emergent route: one-per-galaxy falls out of (FoF region) + (mass-keyed
+gradual merge), no special-casing. Transient duals (max 2–3) survive a few steps
+when two comparable SMBHs share a just-merged region, matching the real post-merger
+pre-coalescence regime.
+
+**Why not exempt the dominant SMBH from the cap (the considered alternative):** that
+would also break the bunching, but reintroduces runaway risk on the dominant one.
+The threshold bump achieved the goal without touching the cap, so the cap's runaway
+protection stays fully intact. Rejected-for-now, recorded here.
+
+**Gate condition for revisiting:** If a future change to the cap (e.g. raising
+`galaxy_smbh_mass_fraction_cap`) widens the in-galaxy mass spread, the 0.5 threshold
+may stop reaching the bunched losers and avg SMBH/galaxy will climb above ~1.5 —
+re-tune the dominance threshold upward, or revisit the cap-exemption alternative.
+The old `galaxy_smbh_stall_share_threshold` setting is retained but unused; remove
+it if the connection-share criterion is not revived.
+
+---
+
 ### Orphan SMBHs are self-limiting, not a runaway — treated as an emergent feature (galaxy-phase2)
 **Finding:** Because SMBH formation is exogenous (decoupled from galaxies), ~95% of
 SMBHs form outside any FoF galaxy (`galaxy_id == 0`) and are structurally invisible
