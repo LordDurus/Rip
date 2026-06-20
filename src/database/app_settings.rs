@@ -144,21 +144,6 @@ pub struct AppSetting {
     /// Burned matter stays in the cell as diffuse gas — does not leave the grid,
     /// so galaxy matter budget is unchanged.
     pub star_burn_rate: f64,
-
-    /// Number of galaxy regions to stamp into the grid at initialisation.
-    // pub galaxy_count: usize,
-
-    /// Influence radius of each galaxy region, in cells.
-    // pub galaxy_radius: f64,
-
-    /// Multiplicative matter-density boost applied to cells inside a galaxy region.
-    /// e.g. 3.0 → cells inside start with 3× the base geometry density.
-    // pub galaxy_overdensity: f64,
-
-    /// Additive curvature bonus applied to cells inside a galaxy region at seed time.
-    /// Raises the local curvature floor so SMBH formation threshold is reachable there.
-    // pub galaxy_curvature_boost: f64,
-
     /// Matter density a cell must reach for a new galaxy to form.
     pub galaxy_formation_density_threshold: f64,
     /// Matter density threshold for a cell to be absorbed into an existing galaxy.
@@ -196,6 +181,14 @@ pub struct AppSetting {
     /// galaxy: comparable-mass pairs (true post-merger duals) survive until one
     /// pulls ahead, so the steady state is ≈1 dominant with rare transient duals.
     pub galaxy_smbh_dominance_threshold: f64,
+    /// Fraction of ripped matter that persists as a fossil dark-matter dimple.
+    /// The dimple gravitates but is not baryonic matter and does not enter the
+    /// inflation calc. Start low (0.1) to minimally perturb validated physics.
+    pub dimple_retention: f64,
+    /// Exponent p in the dimple dilution (a_prev/a_now)^p applied each step.
+    /// p=3 mimics matter-density dilution rho ~ a^-3. This is the sink that
+    /// bounds the (intentionally mass-decoupled) dimple field.
+    pub dimple_dilution_exponent: f64,
 }
 
 impl AppSetting {
@@ -311,6 +304,8 @@ impl AppSetting {
             max_simulation_time: get_f64("MAX_SIMULATION_TIME"),
             dark_matter_ratio: get_f64("DARK_MATTER_RATIO"),
             dark_gravity_boost: get_f64("DARK_GRAVITY_BOOST"),
+            dimple_retention: get_f64("DIMPLE_RETENTION"),
+            dimple_dilution_exponent: get_f64("DIMPLE_DILUTION_EXPONENT"),
             inf_grid_width: get_usize("INF_GRID_WIDTH"),
             inf_grid_height: get_usize("INF_GRID_HEIGHT"),
             inf_grid_depth: get_usize("INF_GRID_DEPTH"),

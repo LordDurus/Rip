@@ -15,6 +15,7 @@ FIELDS = [
     ("matter_density", "Matter Density",      "inferno"),
     ("rip_strength",   "Rip Field Strength",   "plasma"),
     ("dimple_strength","Dimple Strength",       "viridis"),
+    ("rip_dimple",     "Dark-Matter Dimple",   "magma"),
 ]
 
 
@@ -37,7 +38,7 @@ def load_last_timestep(conn, run_id):
         """
         SELECT
             cp.col, cp.row, c.layer,
-            c.matter_density, c.rip_strength, c.dimple_strength,
+            c.matter_density, c.rip_strength, c.dimple_strength, c.rip_dimple,
             c.is_black_hole, c.curvature
         FROM cell c
         JOIN cell_position cp ON c.cell_position_id = cp.cell_position_id

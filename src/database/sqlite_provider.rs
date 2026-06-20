@@ -374,8 +374,8 @@ impl SqliteProvider {
 						black_hole_id, layer, scale_factor,
 						gravity_x, gravity_y, gravity_z, dimple_strength, is_lensing_candidate,
 						is_supermassive, mass, smbh_rip_contribution, is_rip_induced,
-                        smbh_connection_strength, is_star
-				) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+                        smbh_connection_strength, is_star, galaxy_id, rip_dimple
+				) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
         )?;
         for cell in cells {
             stmt.execute(params![
@@ -400,6 +400,8 @@ impl SqliteProvider {
                 cell.is_rip_induced,              // 19
                 cell.smbh_connection_strength,    // 20
                 cell.is_star as i32,              // 21
+                cell.galaxy_id,                   // 22
+                cell.rip_dimple,                  // 23
             ])?;
         }
         Ok(())

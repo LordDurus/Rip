@@ -51,6 +51,8 @@ pub struct Cell {
     pub is_star: bool,
     /// ID of the galaxy this cell belongs to.
     pub galaxy_id: i64,
+    /// The amount this cell's dimple contributes to the overall gravity, calculated after inflation.
+    pub rip_dimple: f64,
 }
 
 impl Cell {
@@ -79,6 +81,7 @@ impl Cell {
             smbh_connection_strength: 0.0,
             is_star: false,
             galaxy_id: 0,
+            rip_dimple: 0.0,
         }
     }
 }
