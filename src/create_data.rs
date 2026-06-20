@@ -5,7 +5,7 @@ use crate::database::entities::structure_particle::StructureParticle;
 use crate::enums::log_level::LogLevel;
 use crate::enums::rip_decay_mechanism::RipDecayMechanism;
 use crate::enums::smbh_connection_mode::SmbhConnectionMode;
-use crate::galaxy::{Galaxy, apply_smbh_competition, build_membership, find_galaxies};
+use crate::galaxy::{Galaxy, apply_smbh_competition, build_membership, find_galaxies, persist_galaxies};
 use crate::gravity::compute_gravity_fft;
 use crate::helpers::black_hole::{revert_black_hole, set_as_black_hole};
 use crate::helpers::grid::{populate_grid, seed_initial_curvature};
@@ -78,9 +78,12 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
         // Galaxies are found dynamically each post-inflation timestep, not seeded.
         // `galaxies` starts empty (seed_initial_curvature returns an empty Vec).
         // prev_membership carries cell->galaxy_id from the prior step for identity
-        // matching; galaxy_next_id hands out fresh positive ids for new galaxies.
+        // matching. New galaxy ids come from the DB (autoincrement), assigned in
+        // persist_galaxies — there is no in-memory counter. prev_galaxy_ids tracks
+        // which ids existed last step so persist_galaxies can deactivate any that
+        // vanish (merged/dissolved).
         let mut prev_membership: std::collections::HashMap<(usize, usize, usize), i64> = std::collections::HashMap::new();
-        let mut galaxy_next_id: i64 = 0;
+        let mut prev_galaxy_ids: std::collections::HashSet<i64> = std::collections::HashSet::new();
 
         let num_particles = app_settings.structure_num_particles;
         let mut positions = vec![(0.0, 0.0, 0.0); num_particles];
@@ -193,9 +196,19 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
             // Runs BEFORE the cell update so the cell pass sees current galaxy tags.
             let galaxies_allowed = previous_matter_delta.abs() < app_settings.star_formation_max_matter_delta;
             if galaxies_allowed {
-                galaxies = find_galaxies(&mut grid, &prev_membership, &app_settings, timestep, run.run_id, &mut galaxy_next_id);
+                galaxies = find_galaxies(&mut grid, &prev_membership, &app_settings, timestep, run.run_id);
                 apply_smbh_competition(&galaxies, &mut grid, &app_settings);
+                // Persist BEFORE build_membership: this swaps newborn sentinel ids
+                // for real DB rowids and re-tags the grid, so the membership map
+                // carries real positive ids forward for next step's identity match.
+                if let Err(err) = persist_galaxies(db, &mut galaxies, &mut grid, &prev_galaxy_ids, timestep) {
+                    let message = format!("Failed to persist galaxies at timestep {timestep}: {err}");
+                    _ = db.log_message(run.run_id, MODULE, LogLevel::Error, &message);
+                    _ = db.fail_run(run.run_id, message.clone());
+                    return Err(message.into());
+                }
                 prev_membership = build_membership(&grid);
+                prev_galaxy_ids = galaxies.iter().map(|g| g.galaxy_id).collect();
             }
 
             // Use previous timestep's matter_delta to gate star formation.

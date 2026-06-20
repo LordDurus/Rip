@@ -228,10 +228,33 @@ The mechanism reproduces the qualitative JWST signature without slow accretion: 
 
 ### Known limitations
 
-- **Unbounded growth.** With connection strength exceeding the drain rate, runaway SMBH mass grows geometrically each step (`(1 + connection − drain) × density`), reaching unphysical magnitudes over 5000 steps. The *distribution shape* is the result here, not the absolute mass values; a physical cap or a finite, drawn-down supply is needed before the absolute scale is meaningful. This is the same conservation question recorded in `decisions.md` — the parent-inflow term creates matter from nothing within the single modeled geometry.
-- **Population count.** ~12,800 SMBHs form, far more than the one-per-galaxy of reality. Because growth is now decoupled from formation (most seeds stall), the effective population is a handful of giants among many stalled small holes, but the raw seed count is still high. Tying formation (not just growth) to a rarer condition — or to the future galaxy structures — would bring the count toward realism.
+- **Unbounded growth — resolved (galaxy-phase2).** Runaway SMBH mass was previously unbounded, reaching ~10¹⁶ as the competitive cap was defeated by a double-subtraction in its denominator (the budget shrank to zero as an SMBH grew, removing its own cap — see `decisions.md`). With that fixed, in-galaxy SMBH mass is bounded by the per-galaxy baryonic budget and the population tops out near ~10⁶, a heavy-tailed distribution with no runaway spike. The conservation question (the parent-inflow term creating matter within the single modeled geometry) remains open and is recorded separately in `decisions.md`.
+- **Population count — partially resolved (galaxy-phase2).** The *in-galaxy* population is now ≈1 SMBH per galaxy via emergent mass-dominance merging (see the galaxy section above). The raw seed count remains high (~9,000–12,000) because ~95% of SMBHs form as orphans outside any galaxy; these are self-limiting but not yet reduced to a realistic count. Tying SMBH *formation* (not just in-galaxy merging) to a rarer condition or to galaxy structures is the remaining step toward a fully realistic total.
 - **No feedback to structure.** As with the inflation result, SMBH mass does not yet feed back into the gravity field or dilute surrounding densities.
 
 ### Next step
 
-The galaxy branch: model galaxy-scale overdensity regions, place SMBHs at their centers, and tie the parent-connection strength (and ideally formation itself) to host properties. That would convert the high seed count into a realistic one-SMBH-per-galaxy population and open the SMBH↔galaxy rip-feedback question.
+The galaxy branch is now implemented (see the galaxy section above): FoF galaxies self-assemble from the density field, and emergent mass-dominance merging produces ≈1 SMBH per galaxy. The open threads from here are the orphan SMBH population (~95% of seeds, self-limiting but high-count), tying SMBH *formation* to host properties to bring the raw count toward realism, and the SMBH↔structure rip-feedback question (mass feeding back into the gravity field).
+## Galaxies: Emergent One-SMBH-per-Galaxy from Friends-of-Friends Structure
+
+<img src="images/galaxy_run1.png" alt="Galaxy centroid map, early vs late timestep" width="700">
+
+**Run:** 1 &nbsp;|&nbsp; **Grid:** 64×64×64 &nbsp;|&nbsp; **Timesteps:** 5000 &nbsp;|&nbsp; **FoF threshold:** 5.0 &nbsp;|&nbsp; **SMBH dominance threshold:** 0.5
+
+### What it shows
+
+Galaxies are no longer seeded. Each post-inflation timestep, a friends-of-friends (FoF) finder identifies galaxies fresh from the density field: connected components of cells above the linking density, re-derived every step, with identity carried forward only by cell-overlap matching. A galaxy is a gravitationally-linked collection of matter, not a placed object — its membership, mass, centroid, and radius are pure functions of the current field.
+
+**Galaxy count is hierarchical.** Many small galaxies condense just after inflation (~220 at the first post-inflation snapshot), then merge and drain into fewer, larger ones over time (~80 at the midpoint, ~10–15 by the end). This birth-then-merge trajectory is emergent from the drain-and-merge dynamics, not imposed.
+
+**One dominant SMBH per galaxy emerges.** Within each FoF region, SMBHs compete for a shared baryonic budget (a per-SMBH cap) and merge gradually: the most massive SMBH is the winner, and any SMBH below half the winner's mass is absorbed into it, mass conserved. The result across the full run is an average of ≈1 SMBH per galaxy, with a maximum of 2–3 in any single galaxy early (transient post-merger pairs) falling to 1 late. The centroid map shows this directly: early galaxies carry a spread of SMBH counts (colored), late galaxies are almost uniformly single-SMBH (one color). This is achieved with no "keep only one" rule — it falls out of the FoF region definition plus a mass-keyed gradual merge.
+
+### Why it matters
+
+This converts the earlier high raw SMBH seed count into a realistic galaxy-scale population. Real galaxies overwhelmingly host a single central supermassive black hole, with occasional dual AGN caught in the window between a galaxy merger and the coalescence of the two black holes. The simulation reproduces exactly that: ≈1 per galaxy, with rare transient duals during merger events — and it does so emergently, from a single competition rule applied to self-assembling structures, rather than by construction.
+
+### Known limitations
+
+- **Orphan SMBHs dominate the raw count.** ~95% of SMBHs form outside any FoF galaxy (in voids and filaments) and are not subject to the in-galaxy competition. They are self-limiting (their growth is tied to local curvature, which is low in drained regions, so they plateau near ~10⁶ rather than running away) but they are not part of the one-per-galaxy result, which governs only the in-galaxy population. Whether orphans should exist at this fraction is an open physical question, documented in `decisions.md`.
+- **Merge target is not physically unique.** The winner is chosen by mass; since the absorbed mass is conserved into it, the choice of winner has no observable consequence (the merged remnant is identical either way), but it means "which SMBH survives" is a bookkeeping convention, not a physical prediction.
+- **No SMBH→structure feedback yet.** The dominant SMBH's mass still does not feed back into the surrounding density field or gravity.

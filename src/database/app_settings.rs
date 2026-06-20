@@ -189,6 +189,13 @@ pub struct AppSetting {
     pub galaxy_min_cells: usize,
     /// Minimum overlap fraction for a found component to inherit a prior galaxy's id.
     pub galaxy_match_min_overlap: f64,
+    /// Mass-based dominance criterion for intra-galaxy SMBH merging. A non-dominant
+    /// SMBH is absorbed into the galaxy's most massive SMBH when its own mass is
+    /// below this fraction of the dominant one's mass. e.g. 0.1 → any SMBH under
+    /// 10% of the dominant SMBH's mass merges in. Drives emergent ~one-SMBH-per-
+    /// galaxy: comparable-mass pairs (true post-merger duals) survive until one
+    /// pulls ahead, so the steady state is ≈1 dominant with rare transient duals.
+    pub galaxy_smbh_dominance_threshold: f64,
 }
 
 impl AppSetting {
@@ -346,15 +353,12 @@ impl AppSetting {
             star_extinction_threshold: get_f64("STAR_EXTINCTION_THRESHOLD"),
             star_burn_rate: get_f64("STAR_BURN_RATE"),
             star_formation_max_matter_delta: get_f64("STAR_FORMATION_MAX_MATTER_DELTA"),
-            // galaxy_count: get_usize("GALAXY_COUNT"),
-            // galaxy_radius: get_f64("GALAXY_RADIUS"),
-            // galaxy_overdensity: get_f64("GALAXY_OVERDENSITY"),
-            // galaxy_curvature_boost: get_f64("GALAXY_CURVATURE_BOOST"),
             galaxy_formation_density_threshold: get_f64("GALAXY_FORMATION_DENSITY_THRESHOLD"),
             galaxy_capture_density_threshold: get_f64("GALAXY_CAPTURE_DENSITY_THRESHOLD"),
             galaxy_mass_growth_rate: get_f64("GALAXY_MASS_GROWTH_RATE"),
             galaxy_smbh_mass_fraction_cap: get_f64("GALAXY_SMBH_MASS_FRACTION_CAP"),
             galaxy_merge_overlap_fraction: get_f64("GALAXY_MERGE_OVERLAP_FRACTION"),
+            galaxy_smbh_dominance_threshold: get_f64("GALAXY_SMBH_DOMINANCE_THRESHOLD"),
             galaxy_smbh_stall_share_threshold: get_f64("GALAXY_SMBH_STALL_SHARE_THRESHOLD"),
             galaxy_fof_density_threshold: get_f64("GALAXY_FOF_DENSITY_THRESHOLD"),
             galaxy_min_cells: get_usize("GALAXY_MIN_CELLS"),
