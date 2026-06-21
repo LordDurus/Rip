@@ -92,3 +92,80 @@ pub fn apply_matter_transport(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSett
         });
     });
 }
+
+/// Gravity-driven dark-matter dimple transport (Tier 1, collisionless).
+///
+/// Same conservative two-pass structure as `apply_matter_transport`, but it
+/// advects `rip_dimple` instead of `matter_density` and is *collisionless*:
+/// every cell participates and flux crosses black-hole cells freely (the dimple
+/// is geometry, not baryonic matter — it passes through). The dimple falls down
+/// the total gravity gradient (which already includes its own self-gravity via
+/// the Poisson source), so it clusters into wells and drains voids, producing
+/// the density contrast that lensing needs. Conserves total rip_dimple exactly;
+/// expansion dilution remains the only sink, so the validated boundedness is
+/// unchanged.
+///
+/// NOTE: this is overdamped (no momentum) — it settles into wells rather than
+/// streaming through them, so it yields halos but NOT the Bullet-Cluster
+/// pass-through offset. That offset needs multi-streaming, i.e. the Tier 2
+/// particle/momentum dynamics. Setting dimple_transport_rate = 0 disables this
+/// pass and recovers the pure static fossil field.
+pub fn apply_dimple_transport(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSetting, step_duration: f64) {
+    let _ = step_duration; // direction-normalized form doesn't need dt
+    if settings.dimple_transport_rate <= 0.0 {
+        return; // movement disabled — pure static fossil (pre-Tier-1 behaviour)
+    }
+    let (h_dim, w_dim, d_dim) = (settings.inf_grid_height, settings.inf_grid_width, settings.inf_grid_depth);
+    const CFL: f64 = 0.25; // never move more than this fraction of a cell's dimple per step
+
+    // outflow[h][w][d] = [-h, +h, -w, +w, -d, +d]
+    let mut outflow = vec![vec![vec![[0.0f64; 6]; d_dim]; w_dim]; h_dim];
+
+    // Pass 1: read the grid immutably, write only `outflow`.
+    {
+        let cells = &*grid;
+        outflow.par_iter_mut().enumerate().for_each(|(h, plane)| {
+            plane.iter_mut().enumerate().for_each(|(w, rowf)| {
+                rowf.iter_mut().enumerate().for_each(|(d, of)| {
+                    let c = &cells[h][w][d];
+                    if c.rip_dimple <= 0.0 {
+                        return;
+                    }
+                    let amount = c.rip_dimple;
+
+                    let (gh, gw, gd) = (c.gravity_x, c.gravity_y, c.gravity_z);
+                    let l1 = gh.abs() + gw.abs() + gd.abs();
+                    if l1 <= 0.0 {
+                        return;
+                    }
+
+                    let move_total = (settings.dimple_transport_rate * amount).min(CFL * amount);
+
+                    let mut raw = [0.0f64; 6];
+                    raw[if gh > 0.0 { 1 } else { 0 }] = move_total * gh.abs() / l1;
+                    raw[if gw > 0.0 { 3 } else { 2 }] = move_total * gw.abs() / l1;
+                    raw[if gd > 0.0 { 5 } else { 4 }] = move_total * gd.abs() / l1;
+                    *of = raw;
+                });
+            });
+        });
+    }
+
+    // Pass 2: gather. Collisionless — no black-hole masking, so every unit a cell
+    // sends is received by exactly one neighbour (total rip_dimple conserved).
+    grid.par_iter_mut().enumerate().for_each(|(h, plane)| {
+        plane.iter_mut().enumerate().for_each(|(w, rowc)| {
+            rowc.iter_mut().enumerate().for_each(|(d, cell)| {
+                let (hm, hp) = ((h + h_dim - 1) % h_dim, (h + 1) % h_dim);
+                let (wm, wp) = ((w + w_dim - 1) % w_dim, (w + 1) % w_dim);
+                let (dm, dp) = ((d + d_dim - 1) % d_dim, (d + 1) % d_dim);
+
+                let sent: f64 = outflow[h][w][d].iter().sum();
+
+                let recv = outflow[hp][w][d][0] + outflow[hm][w][d][1] + outflow[h][wp][d][2] + outflow[h][wm][d][3] + outflow[h][w][dp][4] + outflow[h][w][dm][5];
+
+                cell.rip_dimple = (cell.rip_dimple - sent + recv).max(0.0);
+            });
+        });
+    });
+}

@@ -189,6 +189,18 @@ pub struct AppSetting {
     /// p=3 mimics matter-density dilution rho ~ a^-3. This is the sink that
     /// bounds the (intentionally mass-decoupled) dimple field.
     pub dimple_dilution_exponent: f64,
+    /// Rate at which the dark-matter dimple advects down the gravity gradient each
+    /// step (Tier 1 collisionless clustering). Mirrors transport_rate but acts on
+    /// rip_dimple and ignores black-hole cells (the dimple passes through). 0.0
+    /// disables movement, recovering the pre-Tier-1 pure static fossil behaviour.
+    pub dimple_transport_rate: f64,
+    /// Lensing diagnostic: a cell is flagged is_lensing_candidate when its
+    /// rip_dimple exceeds this AND matter_density is below lensing_matter_max —
+    /// gravitating dark matter sitting where there is little baryonic matter
+    /// ("lensing where there is no matter").
+    pub lensing_dimple_min: f64,
+    /// Lensing diagnostic: upper matter_density bound for a lensing candidate.
+    pub lensing_matter_max: f64,
 }
 
 impl AppSetting {
@@ -306,6 +318,9 @@ impl AppSetting {
             dark_gravity_boost: get_f64("DARK_GRAVITY_BOOST"),
             dimple_retention: get_f64("DIMPLE_RETENTION"),
             dimple_dilution_exponent: get_f64("DIMPLE_DILUTION_EXPONENT"),
+            dimple_transport_rate: get_f64("DIMPLE_TRANSPORT_RATE"),
+            lensing_dimple_min: get_f64("LENSING_DIMPLE_MIN"),
+            lensing_matter_max: get_f64("LENSING_MATTER_MAX"),
             inf_grid_width: get_usize("INF_GRID_WIDTH"),
             inf_grid_height: get_usize("INF_GRID_HEIGHT"),
             inf_grid_depth: get_usize("INF_GRID_DEPTH"),

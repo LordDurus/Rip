@@ -11,7 +11,7 @@ use crate::helpers::black_hole::{revert_black_hole, set_as_black_hole};
 use crate::helpers::grid::{populate_grid, seed_initial_curvature};
 use crate::helpers::particle::{apply_gravity_to_particle, initialize_particles, map_particle_to_cell};
 use crate::helpers::rip::compute_cell_rip_strength;
-use crate::helpers::transport::apply_matter_transport;
+use crate::helpers::transport::{apply_dimple_transport, apply_matter_transport};
 use crate::initial_geometry::InitialGeometry;
 use colored::Colorize;
 use crossterm::event::{self, Event, KeyCode, KeyEvent};
@@ -396,6 +396,12 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                 });
             });
             apply_matter_transport(&mut grid, &app_settings, STEP_DURATION);
+            // Tier 1: collisionless dimple advection. The dark-matter dimple falls
+            // down the total gravity gradient and clusters into wells, carving the
+            // density contrast that lensing needs. Conservative (redistributes,
+            // does not create/destroy); dilution remains the sole sink, so the
+            // validated boundedness is intact. dimple_transport_rate = 0 disables.
+            apply_dimple_transport(&mut grid, &app_settings, STEP_DURATION);
 
             // Process mergers — smaller galaxy absorbed into larger.
 
@@ -452,6 +458,7 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                 let mut max_dimple = 0.0_f64;
                 let mut total_dimple = 0.0_f64;
                 let mut dimpled_cells = 0usize;
+                let mut lensing_candidates = 0usize;
                 for col in grid.iter() {
                     for row in col.iter() {
                         for cell in row.iter() {
@@ -460,12 +467,15 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                                 total_dimple += cell.rip_dimple;
                                 dimpled_cells += 1;
                             }
+                            if cell.rip_dimple > app_settings.lensing_dimple_min && cell.matter_density < app_settings.lensing_matter_max && !cell.is_black_hole {
+                                lensing_candidates += 1;
+                            }
                         }
                     }
                 }
                 eprintln!(
-                    "[t={}] dimple: max={:.4e} total={:.4e} cells={} | a={:.4}",
-                    timestep, max_dimple, total_dimple, dimpled_cells, scale_factor
+                    "[t={}] dimple: max={:.4e} total={:.4e} cells={} lens={} | a={:.4}",
+                    timestep, max_dimple, total_dimple, dimpled_cells, lensing_candidates, scale_factor
                 );
             }
 
@@ -507,6 +517,20 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                 _ = db.fail_run(run.run_id, message);
                 return Err(err.into());
             }
+
+            // Tier 0 lensing diagnostic: flag cells holding gravitating dark
+            // matter where baryonic matter is sparse — "mass where there is no
+            // matter". Set on the final post-transport/dilution state so the
+            // persisted flag matches what the plots read back.
+            let lens_min = app_settings.lensing_dimple_min;
+            let lens_max = app_settings.lensing_matter_max;
+            grid.par_iter_mut().for_each(|col| {
+                col.iter_mut().for_each(|row| {
+                    row.iter_mut().for_each(|cell| {
+                        cell.is_lensing_candidate = cell.rip_dimple > lens_min && cell.matter_density < lens_max && !cell.is_black_hole;
+                    });
+                });
+            });
 
             db.save_all_cells(run.run_id, &mut grid).expect("Error saving cells");
             let active_galaxy_count = galaxies.iter().filter(|g| g.is_active).count() as i64;

@@ -163,8 +163,8 @@ def main():
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # --- Combined figure: all 3 fields side by side ---
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    # --- Combined figure: all fields side by side ---
+    fig, axes = plt.subplots(1, len(FIELDS), figsize=(6 * len(FIELDS), 6))
     fig.suptitle(f"CMB-style Projection — Run {run_id}, Timestep {max_timestep}", fontsize=13)
 
     for ax, (field, label, cmap) in zip(axes, FIELDS):
