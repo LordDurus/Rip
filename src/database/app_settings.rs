@@ -192,7 +192,7 @@ pub struct AppSetting {
     /// Rate at which the dark-matter dimple advects down the gravity gradient each
     /// step (Tier 1 collisionless clustering). Mirrors transport_rate but acts on
     /// rip_dimple and ignores black-hole cells (the dimple passes through). 0.0
-    /// disables movement, recovering the pre-Tier-1 pure static fossil behaviour.
+    /// disables movement, recovering the pre-Tier-1 pure static fossil behavior.
     pub dimple_transport_rate: f64,
     /// Lensing diagnostic: a cell is flagged is_lensing_candidate when its
     /// rip_dimple exceeds this AND matter_density is below lensing_matter_max —
@@ -201,6 +201,9 @@ pub struct AppSetting {
     pub lensing_dimple_min: f64,
     /// Lensing diagnostic: upper matter_density bound for a lensing candidate.
     pub lensing_matter_max: f64,
+
+    pub use_dimple_particles: bool,
+    pub max_dimple_particles: u32,
 }
 
 impl AppSetting {
@@ -373,6 +376,8 @@ impl AppSetting {
             galaxy_fof_density_threshold: get_f64("GALAXY_FOF_DENSITY_THRESHOLD"),
             galaxy_min_cells: get_usize("GALAXY_MIN_CELLS"),
             galaxy_match_min_overlap: get_f64("GALAXY_MATCH_MIN_OVERLAP"),
+            use_dimple_particles: get_bool("USE_DIMPLE_PARTICLES"),
+            max_dimple_particles: get_u32("MAX_DIMPLE_PARTICLES"),
         }
     }
 

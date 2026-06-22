@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 generate_entities.py - Generate Rust entity structs from a SQLite database.
 
@@ -91,6 +90,51 @@ def parse_column_comments(create_sql):
     return out
 
 
+def column_list_close(sql):
+    """Index of the ')' closing the column-list '(', skipping comments/strings,
+    so a table description placed after it can be located."""
+    n = len(sql)
+    i = sql.find("(")
+    if i < 0:
+        return -1
+    i += 1
+    depth = 1
+    while i < n:
+        ch = sql[i]
+        if ch == "/" and i + 1 < n and sql[i + 1] == "*":
+            j = sql.find("*/", i + 2)
+            i = (n if j < 0 else j + 2)
+            continue
+        if ch == "-" and i + 1 < n and sql[i + 1] == "-":
+            j = sql.find("\n", i + 2)
+            i = (n if j < 0 else j)
+            continue
+        if ch in "'\"":
+            j = sql.find(ch, i + 1)
+            i = (n if j < 0 else j + 1)
+            continue
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return -1
+
+
+def parse_table_comment(create_sql):
+    """Table-level /* ... */ description placed after the column-list close paren
+    by set_table_descriptions.py. Empty string if none."""
+    if not create_sql:
+        return ""
+    close = column_list_close(create_sql)
+    if close < 0:
+        return ""
+    m = re.search(r"/\*(.*?)\*/", create_sql[close + 1:], flags=re.S)
+    return " ".join(m.group(1).split()) if m else ""
+
+
 def rust_type(decl, warnings, table, col, bool_prefixes=()):
     d = (decl or "").strip()
     if d in _RUST_TYPES:
@@ -152,9 +196,12 @@ HEADER = (
 
 
 def generate_struct(db_name, table, columns, comments, derives,
-                    warnings, bool_prefixes, with_new):
+                    warnings, bool_prefixes, with_new, table_comment=""):
     name = pascal_case(table)
     out = [HEADER.format(db=db_name).rstrip("\n"), ""]
+    if table_comment:
+        for line in table_comment.splitlines():
+            out.append(f"/// {line}")
     out.append("#[allow(dead_code)]")
     out.append(f"#[derive({', '.join(derives)})]")
     out.append(f"pub struct {name} {{")
@@ -254,7 +301,8 @@ def main(argv=None):
         derives = overrides.get(table, default_derives)
         code = generate_struct(db_path.name, table, columns,
                                parse_column_comments(sql), derives,
-                               warnings, args.bool_prefixes, args.with_new)
+                               warnings, args.bool_prefixes, args.with_new,
+                               parse_table_comment(sql))
         path = out_dir / f"{table}.rs"
         if write_if_changed(path, code):
             print(f"wrote {path}")
