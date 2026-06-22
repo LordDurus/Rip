@@ -49,6 +49,7 @@ impl DbProvider for SqliteProvider {
             status: "running".to_string(),
             seed,
             notes: notes.map(|s| s.to_string()),
+            git_commit: None,
         })
     }
 
@@ -349,8 +350,6 @@ impl DbProvider for SqliteProvider {
             LogLevel::Error => "error",
         };
 
-        dbg!("[{}] [{}] {}: {}", timestamp, level_str, module, message);
-
         self.conn.execute(
             "insert into log (run_id, timestamp, module, level, message) values (?1, ?2, ?3, ?4, ?5)",
             (run_id, timestamp, module, level_str, message),
@@ -380,7 +379,7 @@ impl SqliteProvider {
         for cell in cells {
             stmt.execute(params![
                 run_id,                           // 01
-                cell.position.cell_position_id,   // 02
+                cell.cell_position_id,            // 02
                 cell.timestep,                    // 03
                 cell.curvature,                   // 04
                 cell.matter_density,              // 05

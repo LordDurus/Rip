@@ -117,6 +117,7 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
             .iter()
             .zip(velocities.iter())
             .map(|(&(x, y, z), &(vx, vy, vz))| StructureParticle {
+                structure_particle_id: 0, // placeholder, real ID assigned on DB insert
                 time: 0.0,
                 rip_strength: 0.0,
                 scale_factor: 1.0,
@@ -473,10 +474,11 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                         }
                     }
                 }
-                eprintln!(
-                    "[t={}] dimple: max={:.4e} total={:.4e} cells={} lens={} | a={:.4}",
-                    timestep, max_dimple, total_dimple, dimpled_cells, lensing_candidates, scale_factor
+                let message = format!(
+                    "t={}: max_dimple={:.4e}, total_dimple={:.4e}, dimpled_cells={}, lensing_candidates={}",
+                    timestep, max_dimple, total_dimple, dimpled_cells, lensing_candidates
                 );
+                _ = db.log_message(run.run_id, MODULE, LogLevel::Info, &message);
             }
 
             // Apply gravity to particles and update dimple strength
