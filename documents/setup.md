@@ -81,6 +81,7 @@ pip install pandas numpy matplotlib plotly scipy kaleido
 | `plotly` | `plot_3d.py` | Interactive 3D structure (HTML output) |
 | `scipy` | `plot_structure.py` | `scipy.ndimage.label` for connected-component analysis |
 | `kaleido` | `plot_3d.py` | Static PNG export from Plotly (`fig.write_image`) |
+| `pillow` | `combine_plots.py` | Allows you to perform a wide range of operations on images |
 
 Standard-library modules used (no install needed): `argparse`, `sqlite3`, `shutil`, `subprocess`, `pathlib`.
 

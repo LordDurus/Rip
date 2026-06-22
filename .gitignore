@@ -23,4 +23,5 @@ assets/history/
 **/*.db-journal
 **/*.db-wal
 **/*.db-shm
+**/*.bak
 output/
