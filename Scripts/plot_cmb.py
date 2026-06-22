@@ -15,6 +15,7 @@ FIELDS = [
     ("matter_density", "Matter Density",      "inferno"),
     ("rip_strength",   "Rip Field Strength",   "plasma"),
     ("dimple_strength","Dimple Strength",       "viridis"),
+    ("rip_dimple",     "Dark-Matter Dimple",   "magma"),
 ]
 
 
@@ -37,7 +38,7 @@ def load_last_timestep(conn, run_id):
         """
         SELECT
             cp.col, cp.row, c.layer,
-            c.matter_density, c.rip_strength, c.dimple_strength,
+            c.matter_density, c.rip_strength, c.dimple_strength, c.rip_dimple,
             c.is_black_hole, c.curvature
         FROM cell c
         JOIN cell_position cp ON c.cell_position_id = cp.cell_position_id
@@ -162,8 +163,8 @@ def main():
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # --- Combined figure: all 3 fields side by side ---
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    # --- Combined figure: all fields side by side ---
+    fig, axes = plt.subplots(1, len(FIELDS), figsize=(6 * len(FIELDS), 6))
     fig.suptitle(f"CMB-style Projection — Run {run_id}, Timestep {max_timestep}", fontsize=13)
 
     for ax, (field, label, cmap) in zip(axes, FIELDS):

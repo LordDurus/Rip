@@ -779,3 +779,68 @@ This is flagged as non-conservative *within our single modeled geometry* in RESU
 reasoning above means it is not necessarily non-physical within the full framework. Revisit if/when
 a multi-layer accounting is attempted. The conservative-transport alternative (feed the SMBH only
 from its own neighbors) is recorded as the rejected-for-now option.
+---
+
+## Dark matter that clusters and lenses: dimple movement (darkmatter-phase1, Tier 0 + 1)
+
+**Context.** The 5000-step run validated two things about the static fossil dimple — it stays
+bounded under expansion dilution (total plateaus ~15.6k, max ~7) and inflation survives with the
+early contraction now understood as a one-off black-hole-reversion ringdown, not a recurring
+oscillation. But the `rip_dimple` projection (cmb_rip_dimple) showed the field is a near-uniform,
+space-filling fog with mild texture — the *opposite* of the sharply-clumped matter field. This
+fails the original motivation in two ways. A nearly-uniform mass distribution (a) does not bind
+galaxies differentially — by symmetry a uniform component exerts no net internal force — and
+(b) produces no lensing signal, because convergence/shear require density *contrast*, not mere
+presence. The deposit-everywhere + uniform-dilution + pinned-to-cell design guarantees the fog:
+it records where rips have *ever* happened (≈ everywhere over a long run) rather than where
+structure *is now*. A fossil records the past; a halo has to track the present.
+
+**The realization.** Both canonical cold-dark-matter signatures — flat rotation curves / holding
+galaxies together, and gravitational lensing offset from the baryons (the Bullet Cluster) — come
+from the same missing ingredient: the dimple must *cluster*, producing density contrast that is
+spatially distinct from the baryonic matter. "Lensing where there is no matter" is not exotic; it
+is the defining dark-matter observable, and it falls out for free once a gravitating dimple
+concentrates somewhere the baryons are sparse.
+
+**The fork, and why we take the cheap branch first.**
+- *Tier 1 — overdamped advection (taken now):* move `rip_dimple` down the total gravity gradient
+  with a conservative two-pass scheme mirroring `apply_matter_transport`, collisionless (every cell
+  participates, flux crosses black-hole cells freely). This clusters the dimple into wells and
+  drains voids, creating the contrast lensing needs, and — being conservative — leaves the
+  boundedness argument intact (dilution stays the only sink). It yields *halos* but NOT the
+  Bullet-Cluster pass-through offset, because an overdamped single-velocity grid field settles into
+  wells and cannot multi-stream.
+- *Tier 2 — collisionless particles (deferred):* the spatial offset in a head-on collision requires
+  two streams occupying the same place with different velocities. A grid field (even one carrying
+  momentum) averages to one velocity at the collision point and merges the streams. True
+  pass-through needs a particle/particle-mesh representation (the existing `particle.rs` /
+  `structure_particle.rs` scaffolding is the natural substrate). This is the larger architectural
+  move and is not attempted until Tier 1 is validated.
+
+**Tier 0 — measure before tuning.** Before judging Tier 1 we wired a lensing diagnostic on the
+existing (previously unused) `cell.is_lensing_candidate` field: a cell is flagged when
+`rip_dimple > LENSING_DIMPLE_MIN` and `matter_density < LENSING_MATTER_MAX` (gravitating dark
+matter where baryons are sparse). `plot_lensing.py` projects dimple and baryon surface density,
+reports `r(dimple, baryon)` (≈0 for the fog, rising toward positive as the dimple co-locates) and
+the centroid offset, and maps the candidate cells. Run on the static-fossil field this gives the
+baseline co-location so the effect of switching transport on is measurable, one variable at a time.
+
+**Decision.** Implement Tier 0 + Tier 1 on this branch. New settings: `DIMPLE_TRANSPORT_RATE`
+(0.025, at parity with baryon `TRANSPORT_RATE`; **0 disables and recovers the static fossil** —
+the change is a clean reversible toggle), `LENSING_DIMPLE_MIN` / `LENSING_MATTER_MAX` (0.5 / 0.5,
+tunable diagnostic thresholds calibrated after seeing the first distributions).
+
+**Conceptual cost, recorded explicitly.** Turning on `apply_dimple_transport` is the line where the
+dimple stops being the "pure static geometric fossil decoupled from mass" of the original
+darkmatter-phase1 decision and becomes a *mobile substance*. That earlier framing is hereby
+narrowed: the dimple is still mass-decoupled at the deposit (the GR break stands), but it is no
+longer positionally frozen. This is the cost of the CDM branch and is accepted provisionally.
+
+**Gate condition for Tier 2.** Do not start the particle work until Tier 1 is validated, namely:
+(1) `total_dimple` remains bounded with transport on (conservation + dilution should preserve the
+plateau); (2) the dimple develops genuine contrast and *co-locates* with structure — `r(dimple,
+baryon)` climbs from ~0 toward positive and lensing candidates concentrate on/around galaxies
+rather than filling voids; (3) local `max_dimple` stays manageable (clustering will raise it well
+past the ~7 fog value; watch for stiff gravity feedback or a broken dilution bound). If clustering
+either fails to emerge or runs away, fix Tier 1 (or reconsider the dark-energy reframing) before
+spending effort on the collision offset.

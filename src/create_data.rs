@@ -11,7 +11,7 @@ use crate::helpers::black_hole::{revert_black_hole, set_as_black_hole};
 use crate::helpers::grid::{populate_grid, seed_initial_curvature};
 use crate::helpers::particle::{apply_gravity_to_particle, initialize_particles, map_particle_to_cell};
 use crate::helpers::rip::compute_cell_rip_strength;
-use crate::helpers::transport::apply_matter_transport;
+use crate::helpers::transport::{apply_dimple_transport, apply_matter_transport};
 use crate::initial_geometry::InitialGeometry;
 use colored::Colorize;
 use crossterm::event::{self, Event, KeyCode, KeyEvent};
@@ -117,6 +117,7 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
             .iter()
             .zip(velocities.iter())
             .map(|(&(x, y, z), &(vx, vy, vz))| StructureParticle {
+                structure_particle_id: 0, // placeholder, real ID assigned on DB insert
                 time: 0.0,
                 rip_strength: 0.0,
                 scale_factor: 1.0,
@@ -232,6 +233,14 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
 
                         // Black hole formation — set_as_black_hole marks dirty internally
                         if !cell.is_black_hole {
+                            // Capture the matter about to leave spacetime. Any of the
+                            // rip paths below removes this cell's matter into a child
+                            // geometry; whichever fires, the dark-matter dimple deposit
+                            // is proportional to what left. No special cases — every
+                            // matter-removal site leaves a fossil dimple.
+                            let matter_before_rip = cell.matter_density;
+                            let was_black_hole = cell.is_black_hole;
+
                             // SMBH formation — rare high-curvature seeds with early-time bias.
                             // Checked first: an SMBH seed should not be "claimed" by the
                             // ordinary collapse path before it gets the chance to form.
@@ -268,6 +277,19 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                                 set_as_black_hole(cell, &next_black_hole_id);
                                 cell.is_rip_induced = true;
                             }
+
+                            // Dark-matter dimple: if a rip fired this iteration (the cell
+                            // became a black hole), deposit a persistent fossil dimple
+                            // proportional to the matter that just left spacetime. The
+                            // dimple gravitates (sources the Poisson solve) but is NOT
+                            // baryonic matter and is excluded from total_matter / the
+                            // inflation calc. Decoupled from mass — the matter still fully
+                            // leaves and drives expansion; the dimple is created in
+                            // addition (the intentional GR break). Accumulates across
+                            // repeated rips at a site; bounded by expansion dilution.
+                            if cell.is_black_hole && !was_black_hole {
+                                cell.rip_dimple += app_settings.dimple_retention * matter_before_rip;
+                            }
                         }
 
                         // Star formation/extinction — non-BH cells only.
@@ -291,7 +313,11 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                         cell.mass = cell.matter_density * cell.volume;
 
                         let mut raw = raw_density.lock().unwrap();
-                        raw[height][width][depth] = cell.matter_density;
+                        // Dark-matter dimple sources gravity alongside baryonic matter:
+                        // the persistent fossil curvature left by past rips gravitates
+                        // through the same Poisson solve, but is NOT baryonic matter and
+                        // is deliberately excluded from total_matter / the inflation calc.
+                        raw[height][width][depth] = cell.matter_density + cell.rip_dimple;
                         drop(raw);
                     });
                 });
@@ -371,6 +397,12 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                 });
             });
             apply_matter_transport(&mut grid, &app_settings, STEP_DURATION);
+            // Tier 1: collisionless dimple advection. The dark-matter dimple falls
+            // down the total gravity gradient and clusters into wells, carving the
+            // density contrast that lensing needs. Conservative (redistributes,
+            // does not create/destroy); dilution remains the sole sink, so the
+            // validated boundedness is intact. dimple_transport_rate = 0 disables.
+            apply_dimple_transport(&mut grid, &app_settings, STEP_DURATION);
 
             // Process mergers — smaller galaxy absorbed into larger.
 
@@ -388,6 +420,7 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
             let matter_delta = previous_total_matter - current_total_matter;
 
             //  the following code should be faithful to exp(k·(M₀−Mₜ))
+            let scale_factor_prev = scale_factor;
             scale_factor = scale_factor * f64::exp(matter_delta * app_settings.matter_expansion_rate);
             if scale_factor.is_nan() || scale_factor.is_infinite() {
                 panic!("scale_factor non-finite at timestep {}: {} (matter_delta {})", timestep, scale_factor, matter_delta);
@@ -395,6 +428,58 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
 
             previous_total_matter = current_total_matter;
             previous_matter_delta = matter_delta;
+
+            // Dark-matter dimple dilution: fossil dimples are geometric features of
+            // space, so as the universe expands they stretch and shallow. Couple the
+            // dilution to the scale-factor ratio this step, raised to a tunable
+            // exponent (p=3 mimics matter-density dilution rho ~ a^-3). This is the
+            // sink that bounds the otherwise-unconserved dimple field — without it
+            // the GR-break deposit accumulates without limit and the gravity floor
+            // rises unboundedly. Watch max_dimple/total_dimple below to confirm it
+            // holds.
+            if scale_factor > scale_factor_prev && scale_factor_prev > 0.0 {
+                let dilution = (scale_factor_prev / scale_factor).powf(app_settings.dimple_dilution_exponent);
+                grid.par_iter_mut().for_each(|col| {
+                    col.iter_mut().for_each(|row| {
+                        row.iter_mut().for_each(|cell| {
+                            if cell.rip_dimple > 0.0 {
+                                cell.rip_dimple *= dilution;
+                            }
+                        });
+                    });
+                });
+            }
+
+            // TEMP INSTRUMENT (darkmatter-phase1): watch the dimple field for runaway.
+            // The dimple deposit is decoupled from mass (intentional GR break), so the
+            // dilution above is the only thing bounding it. Print every 25 steps so a
+            // 200-step smoke test gives ~8 readings of the trend. Remove once the
+            // dilution is confirmed to hold the field bounded.
+            if timestep % 25 == 0 {
+                let mut max_dimple = 0.0_f64;
+                let mut total_dimple = 0.0_f64;
+                let mut dimpled_cells = 0usize;
+                let mut lensing_candidates = 0usize;
+                for col in grid.iter() {
+                    for row in col.iter() {
+                        for cell in row.iter() {
+                            if cell.rip_dimple > 0.0 {
+                                max_dimple = max_dimple.max(cell.rip_dimple);
+                                total_dimple += cell.rip_dimple;
+                                dimpled_cells += 1;
+                            }
+                            if cell.rip_dimple > app_settings.lensing_dimple_min && cell.matter_density < app_settings.lensing_matter_max && !cell.is_black_hole {
+                                lensing_candidates += 1;
+                            }
+                        }
+                    }
+                }
+                let message = format!(
+                    "t={}: max_dimple={:.4e}, total_dimple={:.4e}, dimpled_cells={}, lensing_candidates={}",
+                    timestep, max_dimple, total_dimple, dimpled_cells, lensing_candidates
+                );
+                _ = db.log_message(run.run_id, MODULE, LogLevel::Info, &message);
+            }
 
             // Apply gravity to particles and update dimple strength
             for particle in &mut particles {
@@ -415,11 +500,7 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                                 let gravity_magnitude = (cell.gravity_x.powi(2) + cell.gravity_y.powi(2) + cell.gravity_z.powi(2)).sqrt();
 
                                 if cell.is_black_hole || gravity_magnitude > MAX_DIMPLE_NON_BH {
-                                    let already_bh = cell.is_black_hole;
                                     set_as_black_hole(cell, &next_black_hole_id);
-                                    if !already_bh {
-                                        cell.is_rip_induced = true;
-                                    }
                                 } else {
                                     let new_dimple = gravity_magnitude.min(MAX_DIMPLE_NON_BH);
                                     if (new_dimple - cell.dimple_strength).abs() > DIRTY_GRAVITY_THRESHOLD {
@@ -438,6 +519,20 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                 _ = db.fail_run(run.run_id, message);
                 return Err(err.into());
             }
+
+            // Tier 0 lensing diagnostic: flag cells holding gravitating dark
+            // matter where baryonic matter is sparse — "mass where there is no
+            // matter". Set on the final post-transport/dilution state so the
+            // persisted flag matches what the plots read back.
+            let lens_min = app_settings.lensing_dimple_min;
+            let lens_max = app_settings.lensing_matter_max;
+            grid.par_iter_mut().for_each(|col| {
+                col.iter_mut().for_each(|row| {
+                    row.iter_mut().for_each(|cell| {
+                        cell.is_lensing_candidate = cell.rip_dimple > lens_min && cell.matter_density < lens_max && !cell.is_black_hole;
+                    });
+                });
+            });
 
             db.save_all_cells(run.run_id, &mut grid).expect("Error saving cells");
             let active_galaxy_count = galaxies.iter().filter(|g| g.is_active).count() as i64;

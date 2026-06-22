@@ -2,20 +2,22 @@
 // Do not edit by hand - change the column in the database and regenerate.
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct CellPosition {
-    pub cell_position_id: i64,
-    pub col: usize,
-    pub row: usize,
+#[derive(Debug, Clone)]
+pub struct CustomDensity {
+    pub col: i64,
+    pub row: i64,
+    pub layer: i64,
+    pub density: f64,
 }
 
-impl CellPosition {
+impl CustomDensity {
     #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
-            cell_position_id: 0,
             col: 0,
             row: 0,
+            layer: 0,
+            density: 0.0,
         }
     }
 }

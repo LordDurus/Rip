@@ -156,7 +156,7 @@ pub fn find_galaxies(grid: &mut [Vec<Vec<Cell>>], prev_membership: &HashMap<(usi
                 }
                 is_material[idx(c, r, l)] = true;
 
-                // Link to the three lower-index face neighbours (avoids double work).
+                // Link to the three lower-index face neighbors (avoids double work).
                 if c > 0 && is_link(&grid[c - 1][r][l]) {
                     uf.union(idx(c, r, l), idx(c - 1, r, l));
                 }
@@ -241,7 +241,7 @@ pub fn find_galaxies(grid: &mut [Vec<Vec<Cell>>], prev_membership: &HashMap<(usi
     // --- Step 3: identity matching by member overlap ---
     // For each component, count how many of its cells belonged to each prior
     // galaxy_id last timestep. The prior id with the most shared cells wins,
-    // provided the overlap meets the minimum fraction. Merge-only behaviour
+    // provided the overlap meets the minimum fraction. Merge-only behavior
     // falls out naturally: if two prior galaxies both overlap one component,
     // only the larger-overlap one lends its id; the other simply isn't carried
     // forward (its matter is now part of this single merged component).
@@ -258,7 +258,7 @@ pub fn find_galaxies(grid: &mut [Vec<Vec<Cell>>], prev_membership: &HashMap<(usi
 
     // Newly-born galaxies get a negative sentinel id, assigned here and replaced
     // with a real positive DB rowid by the caller's insert_galaxies pass. Negative
-    // ids never collide with positive DB rowids, so a sentinel that leaks into the
+    // ids never collide with positive DB RowIds, so a sentinel that leaks into the
     // DB or membership map is an obvious, fail-loud bug.
     let mut next_sentinel: i64 = -1;
 
@@ -366,7 +366,7 @@ pub fn build_membership(grid: &[Vec<Vec<Cell>>]) -> HashMap<(usize, usize, usize
 /// Steps:
 ///   1. Count SMBHs per galaxy from the grid (single pass over BH cells).
 ///   2. Insert newborns (negative id) in one transaction; the DB stamps real
-///      positive rowids back onto the structs.
+///      positive Row Ids back onto the structs.
 ///   3. Re-tag grid cells that held a sentinel with the real id (single pass).
 ///   4. Snapshot every active galaxy into galaxy_timestep (one transaction).
 ///   5. Deactivate prior ids that no component carried forward (merged/dissolved).

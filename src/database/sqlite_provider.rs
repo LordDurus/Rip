@@ -49,6 +49,7 @@ impl DbProvider for SqliteProvider {
             status: "running".to_string(),
             seed,
             notes: notes.map(|s| s.to_string()),
+            git_commit: None,
         })
     }
 
@@ -349,8 +350,6 @@ impl DbProvider for SqliteProvider {
             LogLevel::Error => "error",
         };
 
-        dbg!("[{}] [{}] {}: {}", timestamp, level_str, module, message);
-
         self.conn.execute(
             "insert into log (run_id, timestamp, module, level, message) values (?1, ?2, ?3, ?4, ?5)",
             (run_id, timestamp, module, level_str, message),
@@ -374,13 +373,13 @@ impl SqliteProvider {
 						black_hole_id, layer, scale_factor,
 						gravity_x, gravity_y, gravity_z, dimple_strength, is_lensing_candidate,
 						is_supermassive, mass, smbh_rip_contribution, is_rip_induced,
-                        smbh_connection_strength, is_star
-				) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
+                        smbh_connection_strength, is_star, galaxy_id, rip_dimple
+				) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)",
         )?;
         for cell in cells {
             stmt.execute(params![
                 run_id,                           // 01
-                cell.position.cell_position_id,   // 02
+                cell.cell_position_id,            // 02
                 cell.timestep,                    // 03
                 cell.curvature,                   // 04
                 cell.matter_density,              // 05
@@ -400,6 +399,8 @@ impl SqliteProvider {
                 cell.is_rip_induced,              // 19
                 cell.smbh_connection_strength,    // 20
                 cell.is_star as i32,              // 21
+                cell.galaxy_id,                   // 22
+                cell.rip_dimple,                  // 23
             ])?;
         }
         Ok(())

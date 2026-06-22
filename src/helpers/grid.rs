@@ -119,7 +119,8 @@ pub fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSett
                 let cell = &mut grid[height][width][depth];
                 progress_bar.inc(1);
                 cell.layer = depth;
-                cell.position = db.get_or_insert_cell_position(width, height);
+                let position = db.get_or_insert_cell_position(width, height);
+                cell.cell_position_id = position.cell_position_id;
                 cell.curvature = rng.gen_range(0.0..0.1);
             }
         }
