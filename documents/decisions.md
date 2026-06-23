@@ -1,15 +1,16 @@
 # Design Decisions
 
 A record of non-obvious choices made during development, and the reasoning behind them.
-This is distinct from `RESULTS.md` (which records what the simulation produced) and
-`run_log.md` (which tracks parameter tuning). This document records *why* the code
-is the way it is.
+This is distinct from `RESULTS.md` (which records what the simulation produced) 
+This document records *why* the code is the way it is.
 
 ---
 
 ## Physics & Model
 
-### Inertia is intrinsic, not emergent (Machian)
+<details>
+<summary><b>Inertia is intrinsic, not emergent (Machian)</b></summary>
+
 **Decision:** Treat inertia as a fixed property of matter rather than emerging from
 the gravitational relationship with all other matter in the universe (Mach's principle).
 
@@ -23,10 +24,11 @@ forever and is permanently lost — the universe has a leaky boundary. Each cycl
 expansion starts with slightly less total matter than the last.
 
 **Revisit:** See `ideas-to-explore.md` — Machian inertia section.
+</details>
 
----
+<details>
+<summary><b>Symmetric matter delta drives expansion</b></summary>
 
-### Symmetric matter delta drives expansion
 **Decision:** Both matter loss and matter gain affect the scale factor symmetrically.
 Matter loss → expansion, matter gain → contraction. The scale factor has a floor of
 its initial value (cannot un-exist) but no ceiling.
@@ -36,10 +38,10 @@ test — the scale factor could only ever increase, making the matter-loss-drive
 correlation trivially true regardless of the actual physics. A symmetric test is the
 honest one. During the inflation epoch matter loss dominates anyway, so expansion still
 wins — but the test is fair.
+</details>
 
----
-
-### Emergent inflation-like behavior as epistemic signal
+<details>
+<summary><b>Emergent inflation-like behavior as epistemic signal</b></summary>
 
 **Observation:** The simulation was not designed to produce inflation. The mechanism — matter crossing geometric thresholds into child geometries, removing itself from normal spacetime — was built to model black hole formation. When the scale factor was wired to respond to matter loss, an inflation-like profile emerged without targeting it: rapid early expansion driven by peak-density rip rates, smooth deceleration as the drain exhausts, graceful exit with no engineered cutoff.
 
@@ -48,10 +50,11 @@ wins — but the test is fair.
 **The structural argument:** Standard inflation requires different physics at different epochs (inflation-dominated early, radiation/matter-dominated later, dark-energy-dominated now). Rip uses one rule throughout. Unification across epochs with emergent epoch-appropriate behavior is the more parsimonious outcome. The flatness and horizon problems that inflation was invented to solve also have a natural candidate answer here: if matter under extreme early-universe density bleeds off into rips rather than accumulating enough to reverse expansion, the rip mechanism acts as a pressure-release valve that naturally drives the geometry toward flatness without requiring a separate inflation field.
 
 **Principle recorded here:** When a simulation produces a result it was not tuned to produce, that is a higher-quality signal than a result it was designed for. The inflation profile belongs in this category. Future results should be evaluated on the same criterion.
+</details>
 
----
+<details>
+<summary><b>FFT Poisson solver for gravity (Jeans swindle for k=0)</b></summary>
 
-### FFT Poisson solver for gravity (Jeans swindle for k=0)
 **Decision:** Solve ∇²φ = 4πGρ in Fourier space using three 1D FFT passes per axis
 with periodic boundary conditions. The k=0 mode (mean density) is set to zero — the
 "Jeans swindle."
@@ -62,10 +65,10 @@ is standard practice in cosmological N-body simulations and avoids an unphysical
 infinite self-gravity term. Periodic boundaries are chosen over zero-padded because
 the simulation models a representative volume of the universe, not an isolated system
 in empty space.
+</details>
 
----
-
-### Rip drain is symmetric with accretion
+<details>
+<summary><b>Rip drain is symmetric with accretion</b></summary>
 **Decision:** Each non-BH cell gains matter via accretion (proportional to local
 gravity magnitude) and loses matter via rip drain (proportional to local rip strength).
 Neither term is clamped to prevent the other from winning.
@@ -74,10 +77,10 @@ Neither term is clamped to prevent the other from winning.
 being tested. Artificially preventing drain from winning would bias the result. The
 rates (`ACCRETION_RATE`, `RIP_DRAIN_RATE`) are tunable parameters — the simulation
 finds its own equilibrium.
+</details>
 
----
-
-### Black hole matter density sentinel value (1e30)
+<details>
+<summary><b>Black hole matter density sentinel value (1e30)</b></summary>
 **Decision:** When a cell collapses into a black hole, `matter_density` is set to
 `1e30` as a sentinel value rather than tracking actual accreted mass.
 
@@ -86,6 +89,7 @@ finds its own equilibrium.
 True mass tracking inside black holes is deferred until black hole healing
 (`RipDecayMechanism::SelfHealing`) is implemented, at which point the return path
 for matter needs a physically motivated value.
+</details>
 
 ---
 
@@ -169,7 +173,8 @@ SAME quantity (mass). The prior criterion absorbed on *connection-strength share
 while selecting the winner by mass — two different quantities — so comparable-
 strength SMBHs all survived and galaxies kept hundreds.
 
-**The cap/merge interaction — why the threshold value matters.** Pass 3 (the cap)
+<details>
+<summary>**The cap/merge interaction — why the threshold value matters.** Pass 3 (the cap)><summary>
 clamps every in-galaxy SMBH toward `baryonic_budget × share`, which *bunches* their
 masses together. Pass 4 then only absorbs SMBHs far below the winner. These work
 against each other: the cap makes everyone similar, so a low dominance threshold
@@ -179,6 +184,7 @@ finds nothing to absorb. Measured directly:
   - threshold 0.5 → avg SMBH/galaxy ≈1.0 across the whole run (max 2–3 early,
     1 late). Absorbing anything under half the dominant mass beats the cap's
     bunching and leaves a single winner plus rare near-equal duals.
+</details>
 
 **Decision:** Use `GALAXY_SMBH_DOMINANCE_THRESHOLD = 0.5`. The threshold is not a
 free knob — it must exceed the mass spread the cap imposes, or the merge is inert.

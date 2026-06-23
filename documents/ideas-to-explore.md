@@ -61,7 +61,7 @@ This also reframes what holographic imprinting means. In standard black hole phy
 
 **Hypothesis:** The fundamental constants of a universe (gravitational constant, speed of light, dark matter ratio, etc.) aren't arbitrary — they're determined by the initial geometry of the matter distribution that formed the parent black hole. Different pre-collapse geometries in the parent universe produce different physics in the resulting child universe.
 
-**Why it's interesting:** This provides a *mechanism* for the multiverse explanation of fine-tuning, rather than treating "many universes with random constants" as a brute postulate. The variation in constants becomes a consequence of the variation in pre-collapse matter arrangements — something the simulation can actually model and test, since you're already parametrizing both initial geometry and physics constants. If certain geometry → constant relationships are stable across runs, that's a real, testable mapping.
+**Why it's interesting:** This provides a *mechanism* for the multiverse explanation of fine-tuning, rather than treating "many universes with random constants" as a brute postulate. The variation in constants becomes a consequence of the variation in pre-collapse matter arrangements — something the simulation can actually model and test, since its already parametrizing both initial geometry and physics constants. If certain geometry → constant relationships are stable across runs, that's a real, testable mapping.
 
 It also ties together three threads already in play: the universe-inside-a-black-hole picture, the initial-geometry parameter sweep, and the per-universe rolled physics constants. Currently those are independent knobs in the simulation; this hypothesis says they're causally linked.
 
@@ -91,7 +91,7 @@ It also ties together three threads already in play: the universe-inside-a-black
 
 **Things to think through:**
 - Boundary conditions: periodic (universe wraps around), zero-padded (universe sits in empty space), or something else? Each gives different behavior.
-- Does the rip field also need long-range treatment, or is it conceptually local? Probably depends on which decay mechanism is chosen.
+- Does the rip also need long-range treatment, or is it conceptually local? Probably depends on which decay mechanism is chosen.
 - The `cell.gravity_x/y/z` storage stays the same; only the computation changes.
 - Existing tuning (curvature_threshold, density thresholds, weights) will likely need recalibration after the switch.
 
@@ -102,8 +102,8 @@ It also ties together three threads already in play: the universe-inside-a-black
 **Hypothesis:** The universe undergoes damped cycles driven by the rip field and black hole formation/healing. Each cycle is smaller than the last due to matter lost beyond gravitational reach during expansion.
 
 **The cycle:**
-1. Rip field drives inflation, black holes form, matter drains into rips
-2. Rip field weakens, black holes slowly heal (self-healing decay mechanism), matter returns
+1. Rip drives inflation, black holes form, matter drains into rips
+2. Rip weakens, black holes slowly heal (self-healing decay mechanism), matter returns
 3. Gravity dominates, returned matter recollapses, new black holes form
 4. Repeat — but each cycle starts with less total matter than the last
 
@@ -133,7 +133,7 @@ negligible observable difference at current simulation scales.
 
 **Concept:** A separate application (not part of the simulation binary) that drives automated parameter sweeps by manipulating `app_setting` values in the database and shelling out to `run`. The simulation itself would need no changes.
 
-**Motivation:** Manual parameter tuning is slow and error-prone. A sweep tool would let you define a parameter space (ranges, step sizes, combinations) and walk it systematically, collecting results across runs for comparison. Essential before any serious threshold calibration or sensitivity analysis.
+**Motivation:** Manual parameter tuning is slow and error-prone. A sweep tool would let the user define a parameter space (ranges, step sizes, combinations) and walk it systematically, collecting results across runs for comparison. Essential before any serious threshold calibration or sensitivity analysis.
 
 **Proposed design:**
 - Reads the current `app_setting` table as a baseline
@@ -345,3 +345,77 @@ curve, so the firewall break is observed deliberately rather than discovered.
 **Status.** Idea only, surfaced during Tier 2 PM design. Connects to the parked "dark matter as
 rip-processed matter" and cosmic-ray-ejecta ideas — all three are "matter that has interacted with a
 rip and carries a signature of it."
+
+---
+
+## Self-interacting dark matter (SIDM): particle-particle collisions
+
+**The idea.** Let the dark-matter dimple particles collide with / scatter off each other, instead of
+being purely collisionless. Surfaced while looking for something to slow over-streaming particles
+down in the Tier 2 PM run.
+
+**Why it is NOT the fix for over-streaming, and why that matters.** Collisionless is the whole point
+of Tier 2, not a limitation to patch. Multi-streaming — two streams occupying the same place at
+different velocities and passing through each other — is the only thing that produces the Bullet
+Cluster offset, the canonical dark-matter smoking gun. Real cold dark matter passed straight through
+in the Bullet Cluster *because* it does not self-interact, while the gas shocked and lagged. Adding
+collisions turns the dark matter back into something gas-like and destroys the one observation Tier 2
+exists to reproduce. If birth velocity is too hot, the fix is a colder birth velocity
+(`DIMPLE_BIRTH_VELOCITY_SCALE`), never a new collision force. This entry exists partly to record that
+reasoning so collisions are not reached for as a calibration band-aid.
+
+**Why it is still a real, separate idea.** "What if this dark matter is *mildly* self-interacting?"
+is a legitimate physics question — it is the SIDM class of models, proposed precisely because purely
+collisionless CDM has tensions (cuspy halo cores vs observed cored profiles, too much small-scale
+structure). SIDM makes distinct, falsifiable predictions: cored (not cuspy) halo centers, and
+collision offsets that differ in a measurable way from the purely collisionless case (the dark matter
+lags slightly, between the collisionless lensing peak and the collisional gas). In this sim it would
+be a cross-section parameter on the dimple particles, scattering nearby pairs.
+
+**Gate condition.** Do not add until purely collisionless Tier 2 is validated end to end (all three
+Tier 2 gates, including a clean Bullet-Cluster offset on a localized colliding pair). Then add the
+self-interaction cross-section as its own flagged parameter and A/B it: collisionless vs SIDM should
+show *different* halo cores and *different* collision offsets. The value of the comparison is that the
+two regimes are observationally distinguishable, so the sim can say which the Rip dark matter
+resembles.
+
+**Status.** Idea only, surfaced during Tier 2 birth-velocity calibration. Strictly downstream of a
+working collisionless baseline — adding it earlier would mask, not illuminate, the collisionless
+dynamics.
+
+---
+
+## Delta / change-only cell storage (decouple grid size from disk)
+
+**The idea.** Stop writing every cell every timestep. A 64³ grid over 5000 steps is ~1.3 billion
+`cell` rows and ~134 GB, and it scales as N³ — which is the real wall blocking larger grids (128³ at
+full per-step storage is ~1 TB), far more than raw disk space is. Most of those rows are cells that
+did **not change** from the previous step (settled voids, quiescent regions). Store periodic full
+snapshots plus only the *deltas* in between (or key on "cells that changed this step"), reconstructing
+any timestep by replaying deltas from the last full snapshot.
+
+**Why not just save every 25th timestep.** Rejected — it loses data that matters: the exact step a
+runaway SMBH forms, the precise contraction-kick timing, any transient that lives and dies between
+snapshots. Time resolution must stay at every step for events; the savings has to come from spatial
+redundancy (unchanged cells), not temporal downsampling. Delta storage keeps every event at full time
+resolution while cutting the bulk that carries no information.
+
+**Why it matters.** This, not the size of the drive, is what gates grid resolution. Cut the per-step
+storage by the fraction of cells that are static (likely large in voids) and 128³ becomes affordable
+on disk, decoupling "better data" (finer grid) from "runaway DB size." It also speeds I/O across the
+board — fewer rows written per step, fewer read on plot.
+
+**Things to think through.** Reconstruction cost (replaying deltas to view an arbitrary timestep vs a
+direct indexed read — the `cell(run_id, timestep)` index assumes full rows); what counts as "changed"
+(exact equality vs a tolerance, given floats); snapshot cadence (how often a full frame, to bound
+replay length); whether the plot scripts read raw rows (they currently do — they would need a
+reconstruction layer or a materialized-timestep view); and fail-loud verification that a
+reconstructed timestep is bit-identical to what full storage would have held.
+
+**Gate condition.** Not needed until grid size or step count actually forces it — 134 GB on the
+current ~900 GB drive is fine for several more 64³ runs. Build it when the next resolution bump is
+the goal, *before* increasing the grid (so the bigger grid lands on the compact storage, not the
+1 TB full-storage path). Pairs with the grid-resolution increase as a prerequisite, not a successor.
+
+**Status.** Engineering idea, surfaced when the 64³×5000 DB hit 134 GB. Real project, not a quick
+toggle; parked until grid growth needs it.
