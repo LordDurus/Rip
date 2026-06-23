@@ -21,7 +21,13 @@ pub struct AppSetting {
     pub light_speed: f64,
     /// Legacy decay factor for initial experiments (may be deprecated).
     pub decay_factor: f64,
-    /// Initial strength of the rip location before inflation effects.
+    /// Tier 2 dark-matter mode switch. When true, dark matter is carried by
+    /// collisionless particles (particle-mesh) that scatter mass onto the grid
+    /// to source gravity, and rip_dimple becomes their projection. When false,
+    /// the validated Tier 1 grid path runs unchanged (set DIMPLE_TRANSPORT_RATE
+    /// to 0 in particle mode; non-zero for the Tier 1 advection fallback).
+    pub use_dimple_particles: bool,
+    /// Initial strength of the rip location before inflation effects.    
     pub rip_initial: f64,
     /// Controls the exponential growth of the rip location during inflation.
     pub rip_decay_rate: f64,
@@ -31,6 +37,11 @@ pub struct AppSetting {
     pub time_step_size: f64,
     /// Maximum simulation time before stopping, in the same units as time steps.
     pub max_simulation_time: f64,
+    /// Upper bound on the dark-matter dimple particle count (Tier 2). Once the
+    /// cap is wired in, exceeding it triggers particle merging (conserving mass
+    /// and momentum) to bound count and per-step cost; 0 = uncapped. Inert while
+    /// use_dimple_particles is false.
+    pub max_dimple_particles: u32,
     /// Proportion of dark matter relative to visible matter.
     pub dark_matter_ratio: f64,
     /// Amplification factor for gravity due to dark matter.
@@ -201,9 +212,8 @@ pub struct AppSetting {
     pub lensing_dimple_min: f64,
     /// Lensing diagnostic: upper matter_density bound for a lensing candidate.
     pub lensing_matter_max: f64,
-
-    pub use_dimple_particles: bool,
-    pub max_dimple_particles: u32,
+    /// Velocity of a dimple when created.
+    pub dimple_birth_velocity_scale: f64,
 }
 
 impl AppSetting {
@@ -234,7 +244,7 @@ impl AppSetting {
                 "bool" => match val.to_lowercase().as_str() {
                     "true" | "1" | "yes" | "y" => Ok(AppValue::Bool(true)),
                     "false" | "0" | "no" | "n" => Ok(AppValue::Bool(false)),
-                    _ => Err(rusqlite::Error::InvalidQuery), // Or construct custom error
+                    _ => Err(rusqlite::Error::InvalidQuery),
                 },
                 "text" => Ok(AppValue::Text(val)),
                 _other => Err(rusqlite::Error::InvalidColumnType(0, dtype.clone(), rusqlite::types::Type::Text)),
@@ -308,7 +318,6 @@ impl AppSetting {
             num_runs: get_usize("NUM_RUNS"),
             num_cores: get_u32("NUM_CORES"),
             matter_expansion_rate: get_f64("MATTER_EXPANSION_RATE"),
-            rip_induced_threshold: get_f64("RIP_INDUCED_THRESHOLD"),
             accretion_rate: get_f64("ACCRETION_RATE"),
             rip_drain_rate: get_f64("RIP_DRAIN_RATE"),
             bh_drain_rate: get_f64("BH_DRAIN_RATE"),
@@ -322,6 +331,7 @@ impl AppSetting {
             dimple_retention: get_f64("DIMPLE_RETENTION"),
             dimple_dilution_exponent: get_f64("DIMPLE_DILUTION_EXPONENT"),
             dimple_transport_rate: get_f64("DIMPLE_TRANSPORT_RATE"),
+            dimple_birth_velocity_scale: get_f64("DIMPLE_BIRTH_VELOCITY_SCALE"),
             lensing_dimple_min: get_f64("LENSING_DIMPLE_MIN"),
             lensing_matter_max: get_f64("LENSING_MATTER_MAX"),
             inf_grid_width: get_usize("INF_GRID_WIDTH"),
@@ -335,6 +345,7 @@ impl AppSetting {
             rip_density_weight: get_f64("RIP_DENSITY_WEIGHT"),
             rip_evaporation_rate: get_f64("RIP_EVAPORATION_RATE"),
             rip_decay_mechanism: get_string("RIP_DECAY_MECHANISM"),
+            rip_induced_threshold: get_f64("RIP_INDUCED_THRESHOLD"),
             rip_initial: get_f64("RIP_INITIAL"),
             rip_decay_rate: get_f64("RIP_DECAY_RATE"),
             blob_count: get_usize("BLOB_COUNT"),

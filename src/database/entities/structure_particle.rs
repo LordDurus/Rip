@@ -16,6 +16,8 @@ pub struct StructureParticle {
     pub velocity_y: f64,
     pub velocity_z: f64,
     pub run_id: i64,
+    /// Mass of the particle
+    pub mass: f64,
 }
 
 impl StructureParticle {
@@ -33,6 +35,7 @@ impl StructureParticle {
             velocity_y: 0.0,
             velocity_z: 0.0,
             run_id: 0,
+            mass: 0.0,
         }
     }
 }

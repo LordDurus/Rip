@@ -286,3 +286,62 @@ The full relativistic relation is E² = (mc²)² + (pc)², which collapses to E=
 - Hawking radiation from a Kerr hole preferentially carries away angular momentum before mass — the hole spins down first, then shrinks. Is there an analog in Rip where a near-threshold cell bleeds rotational energy before crossing?
 
 **Status.** No implementation needed now. Flag here for when internal energy states or SMBH spin are introduced.
+
+---
+
+## Dark-matter dimple particles crossing rips (dimple as a sink, not just a source)
+
+**The idea.** Once dark matter is carried by particles with real momentum (Tier 2), a particle can
+free-fall down a well and arrive at a cell that is — or becomes — an active rip. If the particle is
+a genuine moving object, it has no special exemption from the threshold crossing that removes all
+other matter: it should cross into the child geometry and leave our spacetime too. Under that
+reading the dimple is not only a *source* left behind by past rips, it is also a *sink* — dark
+matter that can itself be processed by a later rip.
+
+**Why it's interesting / why it's hard.** This is the consistent position if the particles are real
+(a thing that gravitates and moves shouldn't be exempt from the threshold), but it reopens a
+coupling the design deliberately firewalls. Matter leaving feeds `matter_delta`, which drives the
+scale factor; `total_matter` is non-BH baryonic cells only, so the dimple currently touches `a(t)`
+only indirectly (gravity -> structure -> rips) and never enters the expansion arithmetic. Making
+dimple particles a sink would route dark-matter mass-loss *back into* `matter_delta`, breaking that
+firewall — the dark matter would start driving expansion directly. That is a different universe from
+the one the current accounting encodes, so it must be a deliberate, gated choice, never a side
+effect.
+
+**Current build behavior.** Particle and rip are decoupled after birth: a dimple particle free-falls
+in gravity and never checks whether the cell under it has re-ripped. A particle sitting at (or
+falling into) a fresh rip is untouched — it keeps gravitating in our spacetime. This is the "fossil
+stays behind" reading, and it is what the firewall currently assumes.
+
+**Why it's parked.** Wiring the sink in now would make the first PM run test two things at once — do
+the particles cluster correctly, and does dark-matter re-ripping perturb expansion — with no way to
+attribute the result to either. Validate clustering first (the Tier 2 gates), then add the sink as
+its own gated step with an explicit A/B on `a(t)`.
+
+**The deep-well connection.** The gravity-derived birth velocity is weakest exactly at well bottoms
+(the gradient cancels there), and well bottoms are where rips form. So the particles most likely to
+sit still are the ones sitting on top of future rip sites — precisely the population this mechanism
+would remove. That makes the question more than academic: if births pile up at well bottoms, the
+sink could be a major channel rather than a rare event. The first PM run's dimple panels and
+particle distribution show how often particles actually reach deep-well bottoms, which tells us how
+much this would even matter.
+
+**Things to think through when revisiting.**
+- Does a re-ripped dimple particle add to `matter_delta` (full firewall break — dark matter drives
+  expansion) or to a separate channel that is tracked but kept out of `a(t)`? Two very different
+  physical claims.
+- Is the trigger "particle in a black-hole cell" or "particle in a cell that rips *this step*"? The
+  former removes anything sitting in an old well; the latter only removes particles present at the
+  moment of a fresh threshold crossing.
+- How much dark matter actually leaves per run — rare event or dominant sink? Sets whether this is a
+  perturbation or a regime change.
+- Conservation bookkeeping: a removed particle's mass leaves the bounded total; confirm the field
+  stays bounded and that removed mass is accounted for, not silently dropped (fail-loud).
+
+**Gate condition.** Do not implement until Tier 2 clustering is validated (the three Tier 2 gates
+pass). Then add as a separately-flagged mechanism with a measured before/after on the inflation
+curve, so the firewall break is observed deliberately rather than discovered.
+
+**Status.** Idea only, surfaced during Tier 2 PM design. Connects to the parked "dark matter as
+rip-processed matter" and cosmic-ray-ejecta ideas — all three are "matter that has interacted with a
+rip and carries a signature of it."

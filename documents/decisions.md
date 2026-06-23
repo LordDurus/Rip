@@ -960,16 +960,23 @@ panics on the missing key (fail-loud — intended).
 
 **Decision.** At each rip site, spawn **one variable-mass particle** carrying
 `mass = dimple_retention * matter_before_rip` — the exact Tier 1 deposit rule, rerouted from
-`rip_dimple +=` to a new particle. Give it the local bulk **matter velocity** as its initial
-velocity. Add a `mass` field to `StructureParticle` (position and velocity already exist).
+`rip_dimple +=` to a new particle. Give it a **gravity-derived birth velocity**
+(`velocity = local gravity * DIMPLE_BIRTH_VELOCITY_SCALE`, 0.01 start). Add a `mass` field to
+`StructureParticle` (position and velocity already exist).
 
 **Reason.** One particle per event keeps the particle count bounded by the number of rip events
 (rather than by a mass/unit ratio that could explode), and reusing the identical deposit constant
 means the only thing that changed between Tier 1 and Tier 2 is the *representation* of the dark
-matter, not how much is created — clean one-variable-at-a-time comparison. Inheriting the local
-matter velocity (rather than a cold start at rest) is more physical — the dark matter forms from
-matter that was already moving — and gives it the momentum needed to sail ballistically through a
-collision, which is the whole point of the Bullet Cluster test.
+matter, not how much is created — clean one-variable-at-a-time comparison. On birth velocity: the
+original plan was to inherit the local matter velocity, but reading the code showed there is **no
+matter velocity field** — matter is a grid density advected down the gravity gradient, with no
+per-cell velocity to inherit. A pure cold start (v=0) is also wrong: nothing physical sits at
+exactly rest. So the birth velocity is **gravity-derived** — `velocity = local gravity *
+DIMPLE_BIRTH_VELOCITY_SCALE` — born moving the way the local well pulls, emergent from the field
+rather than a hardcoded number, and never exactly zero. Caveat to watch: rip sites are deep wells
+where the gradient is smallest, so the birth kick there is weak; if the dark matter just sits and
+over-concentrates, raise the scale. Seeded at 0.01 (= STEP_DURATION, one step's worth of the local
+acceleration); calibrate after the first PM run.
 
 **Consequence.** Variable-mass particles complicate two-body relaxation and any future merging
 (unequal masses relax non-uniformly). Equal-mass particles are the cleaner N-body choice and are the
@@ -1022,9 +1029,42 @@ firewall as Tier 1 and it must survive the move to particles.
   equal-mass if gate-1 shot noise or grainy halos show relaxation artifacts.
 - **CIC vs NGP** — CIC chosen; fall back to symmetric NGP only if profiling shows CIC scatter+gather
   is the bottleneck.
-- **Initial velocity** — local matter velocity chosen; cold start (rest) is the alternative if the
-  inherited velocity injects too much initial heat.
+- **Initial velocity** — gravity-derived (`local gravity * DIMPLE_BIRTH_VELOCITY_SCALE`) chosen;
+  inheriting matter velocity is impossible (no matter velocity field) and pure cold start is
+  unphysical. Scale seeded at 0.01; raise it if births in deep wells are too sluggish, lower it if
+  the initial kick injects too much heat.
 - **CFL on the push** — require `|v|·dt < cell size` for the particle advection; if violated, sub-step
   the push or cap dt. Watch this before the first long run.
 - **`FftPlanner` reuse** — mass assignment + FFT run every step; reuse the existing planner, do not
   reallocate (this overlaps the standing optimization thread).
+
+---
+
+## Infrastructure & performance
+
+### Index `cell(run_id, timestep)`
+
+**Decision.** Add `CREATE INDEX IF NOT EXISTS idx_cell_run_timestep ON cell(run_id, timestep);`
+to `template.db` (so it propagates to every `rip_data.db` on a reset run).
+
+**Reason.** Every per-timestep plot (`plot_smbh`, `plot_structure`, `plot_3d`, `plot_cmb_power`)
+and the cell save/load paths filter the `cell` table by `(run_id, timestep)`. Without an index on
+those columns each query is a full table scan. At 200 steps the table was small enough that the scan
+was unnoticeable; at 5000 steps the `cell` table is large, and the scan became punishing — `plot.bat`
+appeared to hang for minutes on the densest panel (`plot_cmb_power` for `rip_strength` at t=4999).
+The give-away was the resource profile: CPU flat at ~2% while the project disk sat at ~97%, i.e. not
+computing but thrashing random reads. The project lives on a spinning SATA HDD, where a large scan's
+random-read pattern is especially slow, so the missing index hurt far more than it would on SSD/NVMe.
+
+**Consequence.** Scans become indexed lookups; the per-timestep plots go from minutes to effectively
+instant. Cost is a small `INSERT` overhead during the sim run (the index is maintained as cell rows
+are written) — negligible for this write-once-read-many workload. Must live in `template.db`, not
+just the working `rip_data.db`, or it is lost on the next reset. General principle: index the columns
+the hot read path filters on; on a spinning disk this is not optional once a table gets large.
+
+**Storage note.** The repo currently lives on a spinning HDD. Moving the DB (`data/`) to NVMe would
+further speed sim writes and plotting, but the index is the load-bearing fix — it removes the scan
+regardless of disk. If relocating, move `data/` (the DB benefits from fast storage) and leave
+`target/` (build artifacts, multi-GB, no benefit) on the roomy disk; never relocate while a run holds
+the DB open, and never onto a volume too small for the DB to grow into (a SQLite disk-full mid-write
+can corrupt).

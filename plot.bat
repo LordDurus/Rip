@@ -7,7 +7,7 @@ setlocal
 
 :: Defaults
 set run_id=1
-set timestep=199
+set timestep=4999
 
 :: Override if arguments provided
 if not "%~1"=="" set run_id=%~1
