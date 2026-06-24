@@ -2,9 +2,27 @@ use crate::database::app_settings::AppSetting;
 
 #[derive(Debug, Clone)]
 pub enum InitialGeometry {
-    Uniform { density: f64 },
-    GaussianBlobs { count: usize, peak_density: f64, sigma_min: f64, sigma_max: f64 },
-    Perlin { octaves: u32, frequency: f64, amplitude: f64, seed: u32 },
+    Uniform {
+        density: f64,
+    },
+    GaussianBlobs {
+        count: usize,
+        peak_density: f64,
+        sigma_min: f64,
+        sigma_max: f64,
+    },
+    Perlin {
+        octaves: u32,
+        frequency: f64,
+        amplitude: f64,
+        seed: u32,
+    },
+    /// Bullet Cluster test (Tier 3): one Gaussian clump used to grow an emergent
+    /// dimple halo, mirrored into a colliding pair at the collision phase.
+    BulletCluster {
+        sigma: f64,
+        peak_density: f64,
+    },
     Custom, // Reads from custom_density table
 }
 
@@ -26,8 +44,12 @@ impl InitialGeometry {
                 amplitude: settings.perlin_amplitude,
                 seed: settings.perlin_seed,
             },
+            "bullet" | "bullet_cluster" => Self::BulletCluster {
+                sigma: settings.bullet_clump_sigma,
+                peak_density: settings.bullet_clump_peak_density,
+            },
             "custom" => Self::Custom,
-            other => panic!("Unknown INITIAL_GEOMETRY: '{}'. Expected: uniform, blobs, perlin, custom", other),
+            other => panic!("Unknown INITIAL_GEOMETRY: '{}'. Expected: uniform, blobs, perlin, custom, bullet_cluster", other),
         }
     }
 }

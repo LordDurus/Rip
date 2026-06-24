@@ -84,6 +84,12 @@ pub struct AppSetting {
     pub blob_sigma_min: f64,
     /// Maximum standard deviation (spread) of a blob, in cell units.
     pub blob_sigma_max: f64,
+    // --- Bullet Cluster params (Tier 3 dark-matter collision test) ---
+    /// Gaussian spread (std dev, in cell units) of each bullet-cluster clump.
+    pub bullet_clump_sigma: f64,
+    /// Peak matter density at the center of a bullet-cluster clump. Must exceed
+    /// collapse_density_threshold or the clump never rips and grows no halo.
+    pub bullet_clump_peak_density: f64,
     // --- Perlin params ---
     /// Number of noise octaves summed; more octaves add finer detail at diminishing amplitude.
     pub perlin_octaves: u32,
@@ -352,6 +358,8 @@ impl AppSetting {
             blob_peak_density: get_f64("BLOB_PEAK_DENSITY"),
             blob_sigma_min: get_f64("BLOB_SIGMA_MIN"),
             blob_sigma_max: get_f64("BLOB_SIGMA_MAX"),
+            bullet_clump_sigma: get_f64("BULLET_CLUMP_SIGMA"),
+            bullet_clump_peak_density: get_f64("BULLET_CLUMP_PEAK_DENSITY"),
             perlin_octaves: get_u32("PERLIN_OCTAVES"),
             perlin_frequency: get_f64("PERLIN_FREQUENCY"),
             perlin_amplitude: get_f64("PERLIN_AMPLITUDE"),

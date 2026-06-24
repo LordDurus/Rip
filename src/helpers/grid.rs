@@ -83,6 +83,36 @@ pub fn populate_grid(
             }
         }
 
+        InitialGeometry::BulletCluster { sigma, peak_density } => {
+            // Phase-1a: a SINGLE Gaussian clump at the box center. It virializes
+            // and grows its own EMERGENT dimple halo via the normal rip path
+            // (the momentum channel does not exist yet). Phase-1b will mirror
+            // this into two clumps offset along the WIDTH axis for the collision.
+            //
+            // AXIS CONVENTION: create_data allocates grid[height][width][depth]
+            // (outer = height, middle = width, inner = depth). The locals named
+            // depth/height/width above are SWAPPED relative to that allocation
+            // (harmless for the isotropic random blobs, a trap for directional
+            // placement), so index explicitly here. Collision axis = WIDTH = the
+            // middle index, which is where phase-1b will offset the pair.
+            let n_h = grid.len();
+            let n_w = if n_h > 0 { grid[0].len() } else { 0 };
+            let n_d = if n_w > 0 { grid[0][0].len() } else { 0 };
+            let (ch, cw, cd) = (n_h as f64 / 2.0, n_w as f64 / 2.0, n_d as f64 / 2.0);
+            let two_sigma2 = 2.0 * sigma * sigma;
+            for h in 0..n_h {
+                for w in 0..n_w {
+                    for d in 0..n_d {
+                        let dh = h as f64 - ch;
+                        let dw = w as f64 - cw;
+                        let dd = d as f64 - cd;
+                        let r2 = dh * dh + dw * dw + dd * dd;
+                        grid[h][w][d].matter_density = peak_density * (-r2 / two_sigma2).exp();
+                    }
+                }
+            }
+        }
+
         InitialGeometry::Custom => {
             // Default to 0 first
             for layer in grid.iter_mut() {

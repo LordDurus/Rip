@@ -7,7 +7,7 @@ setlocal
 
 :: Defaults
 set run_id=1
-set timestep=4999
+set timestep=199
 
 :: Override if arguments provided
 if not "%~1"=="" set run_id=%~1
@@ -34,6 +34,8 @@ py plot_3d.py --run-id %run_id% --timestep %timestep% --density-percentile 95
 py plot_matter.py --run-id %run_id%
 py plot_smbh.py --run-id %run_id% --timestep %timestep%
 py plot_galaxy.py --run-id %run_id% --timestep %timestep%
+rem Debug
+rem py bullet_offset_diagnostic.py -run-id %run_id%
 py combine_plots.py --run-id %run_id% --folder ../output
 cd ..
 

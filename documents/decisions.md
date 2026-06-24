@@ -1074,3 +1074,131 @@ regardless of disk. If relocating, move `data/` (the DB benefits from fast stora
 `target/` (build artifacts, multi-GB, no benefit) on the roomy disk; never relocate while a run holds
 the DB open, and never onto a volume too small for the DB to grow into (a SQLite disk-full mid-write
 can corrupt).
+
+
+## Tier 3 — Bullet Cluster (dark-matter collision test) (bullet-cluster-phase1)
+
+The decisive dark-matter test: the one observation where reality shows dark matter
+*offset* from visible matter. Two clusters collide; the collisional gas shocks and
+lags while the collisionless dark matter sails ahead, so the lensing-mass centroid
+leads the X-ray-gas centroid. The Tier 2 dimple particles are already collisionless
+(half the test is built); the work is giving the gas the ability to lag, then staging
+a collision and measuring the offset. This is what would turn the weak global
+dimple/baryon correlation (Tier 2: r ~ 0.13, an interesting-but-unproven prediction)
+into a recognized match — or expose it as a failure.
+
+### Decision — split into formation (1a) and collision (1b); 1a gates 1b
+
+**Decision.** Phase 1a seeds a SINGLE clump and runs the existing, validated main
+loop with no collision machinery, to answer one prerequisite question: does a seeded
+overdensity virialize into a clean, emergent dimple halo? Only if it does is 1b (the
+collision) meaningful. 1a touches nothing in the physics loop — it is just a new
+`InitialGeometry::BulletCluster` variant (one Gaussian clump at box center) plus its
+two seed params; the halo forms via the normal rip path.
+
+**Reason.** Mirrors the Tier 2 discipline (inert baseline before PM). If a lone clump
+cannot grow a co-located halo, no collision result could be trusted, so building
+collision code first would be building on sand. Keeping 1a to geometry-only means it
+compiles and runs on the validated path with zero regression risk — a cheap, fast gate.
+
+**Consequence.** The emergent-halo requirement is load-bearing and forbids shortcuts:
+the halo must come from rips, never be painted in by hand, or the collision tests a
+hand-drawn blob instead of the mechanism. 1b is unblocked only after 1a passes.
+
+---
+
+### Decision — Phase 1a validated: a seeded clump grows an emergent dimple halo
+
+**Decision.** Phase 1a passes. A single clump (sigma 6, peak 10) at box center on the
+64^3 grid forms a centrally-concentrated emergent dimple halo, co-located with the
+baryons.
+
+**Reason.** The t=0 signature matches the geometry exactly: rips fire where density >
+COLLAPSE_DENSITY_THRESHOLD (1.5), i.e. 10*exp(-r^2/72) > 1.5 -> r < 11.7 cells -> a
+core of ~6,700 cells; the log reported 6,938 dimpled cells at t=0 (vs ~18,800 spread
+everywhere for a perlin field — the localized opposite). The dimple panel shows a
+textbook radial halo; lensing gives r(dimple,baryon) = +0.405 with centroid offset
+0.28 cells — essentially perfect co-location. The moderate r (vs Tier 1's ~0.9) is the
+extended-halo signature seen in the full PM runs: the dimple is broader than the
+baryon, so per-cell correlation is modest even with aligned centroids — correct
+dark-matter behavior, not a defect. (Note: the first 1a run accidentally ran perlin
+because INITIAL_GEOMETRY was not switched in the DB the sim loads; run_setting snapshot
+is the ground truth for what a run actually used.)
+
+**Consequence.** The apparatus is proven: seed a clump, it grows its own halo. This
+also surfaced the phase-1b box constraint below — the halo reaches ~25-cell radius by
+200 steps, which on a finite periodic box collides with the separation needed to stage
+two clumps.
+
+---
+
+### Decision — success metric is the gas-dimple centroid offset, not halo separation
+
+**Decision.** Bullet Cluster success = the centroid offset between the gas
+(matter_density) and the dark-matter dimple along the collision axis, measured per
+clump after closest approach. Halo overlap during the passage is accepted and expected;
+disjoint halos are NOT required.
+
+**Reason.** This is what the real observation is — the measured displacement between the
+lensing-mass centroid and the X-ray-gas centroid — and the actual Bullet Cluster halos
+overlap heavily during collision. Requiring disjoint halos would be a stricter, *less*
+physical test than reality applies, and it is unachievable for virialized (hence
+extended) halos on a finite periodic box: phase 1a showed ~25-cell halo radius, while
+the periodic stall caps usable center separation below half-box, so two virialized
+halos necessarily overlap. The centroid-offset metric is correct independent of grid
+size — it would be the right choice on any box — so it is a fidelity decision, not a
+hardware workaround. The earlier "fully virialized clumps" choice is preserved because
+the metric no longer fights halo extent.
+
+**Consequence.** Phase 1b measures per-clump gas and dimple centroids projected along
+the collision axis (WIDTH) and reports their displacement; success = the dimple centroid
+leads (is ahead of) the gas centroid after the passage, in the direction of travel.
+Clump-membership assignment (which cells/particles belong to which clump when halos
+overlap) becomes a required piece of the measurement — assign by proximity to the two
+tracked cores. The dense ripping cores (r < 12 cells) stay resolvable as two centroids
+even when halo outskirts merge.
+
+---
+
+### Decision — increase the grid from 64^3 to 80^3 for the Bullet Cluster work
+
+**Decision.** Set INF_GRID_WIDTH = INF_GRID_HEIGHT = INF_GRID_DEPTH = 80 (all three
+together, or the grid is non-cube).
+
+**Reason.** The universe is sparse — real clusters have ample empty space between them —
+so the overlap problem is purely a finite-box artifact, not physics. More cells give
+cleaner cores, more room before halos wrap the periodic boundary, and finer resolution
+of the centroid offset. 80^3 is affordable on the current ~900 GB NVMe drive. This is
+orthogonal to the centroid-offset metric: it improves resolution and headroom but does
+not change what is measured.
+
+**Consequence.** Storage and compute scale as N^3: 80^3 is (80/64)^3 = 1.95x the cells
+of 64^3, so a 5000-step run grows from ~134 GB to ~262 GB and per-run wall-clock
+roughly doubles (FFT solve + per-timestep plot scans both ~2x). This spends roughly half
+the remaining drive headroom. Note 80 = 2^4 * 5 is not a power of two; rustfft handles
+it but the factor of 5 is marginally slower than a pure 2^n grid — a candidate cause if
+the gravity solve ever drags.
+
+---
+
+### Decision — disk usage is now the top infrastructure priority
+
+**Decision.** After Bullet Cluster phase 1b lands, the next infrastructure work is the
+parked **delta / change-only cell storage** scheme (see ideas-to-explore.md), promoted
+from "someday" to top of the priority list.
+
+**Reason.** Full per-step cell storage scales as N^3 * steps and is the real wall, not
+drive size. 64^3x5000 is ~134 GB; the 80^3 bump takes a run to ~262 GB; 96^3 under full
+storage is not viable on the current drive. The grid bump just spent half the remaining
+headroom, so the storage rework is now what stands between the project and any further
+resolution increase. Per the parked idea, savings must come from spatial redundancy
+(store snapshots + deltas of changed cells), never temporal downsampling — every-25th-
+timestep loses events (exact SMBH-formation step, contraction-kick timing) and is
+rejected.
+
+**Consequence.** Grid resolution is now coupled to the storage rework: do the
+delta-storage project *before* the next grid increase, so the bigger grid lands on the
+compact path rather than the ~1 TB full-storage path. Plot scripts and the
+`cell(run_id, timestep)` index both assume full rows, so reconstruction (or a
+materialized-timestep view) is part of the scope, with fail-loud verification that a
+reconstructed timestep is bit-identical to full storage.
