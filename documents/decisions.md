@@ -1,15 +1,16 @@
 # Design Decisions
 
 A record of non-obvious choices made during development, and the reasoning behind them.
-This is distinct from `RESULTS.md` (which records what the simulation produced) and
-`run_log.md` (which tracks parameter tuning). This document records *why* the code
-is the way it is.
+This is distinct from `RESULTS.md` (which records what the simulation produced) 
+This document records *why* the code is the way it is.
 
 ---
 
 ## Physics & Model
 
-### Inertia is intrinsic, not emergent (Machian)
+<details>
+<summary><b>Inertia is intrinsic, not emergent (Machian)</b></summary>
+
 **Decision:** Treat inertia as a fixed property of matter rather than emerging from
 the gravitational relationship with all other matter in the universe (Mach's principle).
 
@@ -23,10 +24,11 @@ forever and is permanently lost — the universe has a leaky boundary. Each cycl
 expansion starts with slightly less total matter than the last.
 
 **Revisit:** See `ideas-to-explore.md` — Machian inertia section.
+</details>
 
----
+<details>
+<summary><b>Symmetric matter delta drives expansion</b></summary>
 
-### Symmetric matter delta drives expansion
 **Decision:** Both matter loss and matter gain affect the scale factor symmetrically.
 Matter loss → expansion, matter gain → contraction. The scale factor has a floor of
 its initial value (cannot un-exist) but no ceiling.
@@ -36,22 +38,23 @@ test — the scale factor could only ever increase, making the matter-loss-drive
 correlation trivially true regardless of the actual physics. A symmetric test is the
 honest one. During the inflation epoch matter loss dominates anyway, so expansion still
 wins — but the test is fair.
+</details>
 
----
-
-### Emergent inflation-like behavior as epistemic signal
+<details>
+<summary><b>Emergent inflation-like behavior as epistemic signal</b></summary>
 
 **Observation:** The simulation was not designed to produce inflation. The mechanism — matter crossing geometric thresholds into child geometries, removing itself from normal spacetime — was built to model black hole formation. When the scale factor was wired to respond to matter loss, an inflation-like profile emerged without targeting it: rapid early expansion driven by peak-density rip rates, smooth deceleration as the drain exhausts, graceful exit with no engineered cutoff.
 
-**Why this matters for the hypothesis:** Inflation as standardly formulated was constructed *backwards* — the inflaton field was invented specifically to produce flatness, horizon-agreement, and monopole dilution. Its fit to those observations is therefore weak evidence; a mechanism designed to fit will fit. Rip's inflation-like behavior was not solicited. The shape emerged from a single rule applied uniformly across all epochs: matter lost from normal spacetime expands it. That the same rule produces inflation-scale behavior early (when densities and rip rates are highest) and slow late-time expansion afterward — without separate physics for each epoch — is a stronger signal than a mechanism that was tuned to do so.
+**Why this matters for the hypothesis:** Inflation as standardly formulated was constructed *backwards* — the inflation field was invented specifically to produce flatness, horizon-agreement, and monopole dilution. Its fit to those observations is therefore weak evidence; a mechanism designed to fit will fit. Rip's inflation-like behavior was not solicited. The shape emerged from a single rule applied uniformly across all epochs: matter lost from normal spacetime expands it. That the same rule produces inflation-scale behavior early (when densities and rip rates are highest) and slow late-time expansion afterward — without separate physics for each epoch — is a stronger signal than a mechanism that was tuned to do so.
 
-**The structural argument:** Standard inflation requires different physics at different epochs (inflaton-dominated early, radiation/matter-dominated later, dark-energy-dominated now). Rip uses one rule throughout. Unification across epochs with emergent epoch-appropriate behavior is the more parsimonious outcome. The flatness and horizon problems that inflation was invented to solve also have a natural candidate answer here: if matter under extreme early-universe density bleeds off into rips rather than accumulating enough to reverse expansion, the rip mechanism acts as a pressure-release valve that naturally drives the geometry toward flatness without requiring a separate inflaton field.
+**The structural argument:** Standard inflation requires different physics at different epochs (inflation-dominated early, radiation/matter-dominated later, dark-energy-dominated now). Rip uses one rule throughout. Unification across epochs with emergent epoch-appropriate behavior is the more parsimonious outcome. The flatness and horizon problems that inflation was invented to solve also have a natural candidate answer here: if matter under extreme early-universe density bleeds off into rips rather than accumulating enough to reverse expansion, the rip mechanism acts as a pressure-release valve that naturally drives the geometry toward flatness without requiring a separate inflation field.
 
 **Principle recorded here:** When a simulation produces a result it was not tuned to produce, that is a higher-quality signal than a result it was designed for. The inflation profile belongs in this category. Future results should be evaluated on the same criterion.
+</details>
 
----
+<details>
+<summary><b>FFT Poisson solver for gravity (Jeans swindle for k=0)</b></summary>
 
-### FFT Poisson solver for gravity (Jeans swindle for k=0)
 **Decision:** Solve ∇²φ = 4πGρ in Fourier space using three 1D FFT passes per axis
 with periodic boundary conditions. The k=0 mode (mean density) is set to zero — the
 "Jeans swindle."
@@ -62,10 +65,10 @@ is standard practice in cosmological N-body simulations and avoids an unphysical
 infinite self-gravity term. Periodic boundaries are chosen over zero-padded because
 the simulation models a representative volume of the universe, not an isolated system
 in empty space.
+</details>
 
----
-
-### Rip drain is symmetric with accretion
+<details>
+<summary><b>Rip drain is symmetric with accretion</b></summary>
 **Decision:** Each non-BH cell gains matter via accretion (proportional to local
 gravity magnitude) and loses matter via rip drain (proportional to local rip strength).
 Neither term is clamped to prevent the other from winning.
@@ -74,10 +77,10 @@ Neither term is clamped to prevent the other from winning.
 being tested. Artificially preventing drain from winning would bias the result. The
 rates (`ACCRETION_RATE`, `RIP_DRAIN_RATE`) are tunable parameters — the simulation
 finds its own equilibrium.
+</details>
 
----
-
-### Black hole matter density sentinel value (1e30)
+<details>
+<summary><b>Black hole matter density sentinel value (1e30)</b></summary>
 **Decision:** When a cell collapses into a black hole, `matter_density` is set to
 `1e30` as a sentinel value rather than tracking actual accreted mass.
 
@@ -86,6 +89,7 @@ finds its own equilibrium.
 True mass tracking inside black holes is deferred until black hole healing
 (`RipDecayMechanism::SelfHealing`) is implemented, at which point the return path
 for matter needs a physically motivated value.
+</details>
 
 ---
 
@@ -169,7 +173,8 @@ SAME quantity (mass). The prior criterion absorbed on *connection-strength share
 while selecting the winner by mass — two different quantities — so comparable-
 strength SMBHs all survived and galaxies kept hundreds.
 
-**The cap/merge interaction — why the threshold value matters.** Pass 3 (the cap)
+<details>
+<summary>**The cap/merge interaction — why the threshold value matters.** Pass 3 (the cap)><summary>
 clamps every in-galaxy SMBH toward `baryonic_budget × share`, which *bunches* their
 masses together. Pass 4 then only absorbs SMBHs far below the winner. These work
 against each other: the cap makes everyone similar, so a low dominance threshold
@@ -179,6 +184,7 @@ finds nothing to absorb. Measured directly:
   - threshold 0.5 → avg SMBH/galaxy ≈1.0 across the whole run (max 2–3 early,
     1 late). Absorbing anything under half the dominant mass beats the cap's
     bunching and leaves a single winner plus rare near-equal duals.
+</details>
 
 **Decision:** Use `GALAXY_SMBH_DOMINANCE_THRESHOLD = 0.5`. The threshold is not a
 free knob — it must exceed the mass spread the cap imposes, or the merge is inert.
@@ -487,17 +493,17 @@ WHERE run_id = 1 AND timestep % 25 = 0
 ORDER BY timestep;
 ```
 ```
-st    black_hole_count  total_matter      scale_factor
+ts    black_hole_count  total_matter      scale_factor
 0     11187             254876.750173958	1.02934751978424
 25	  14417	            249323.566957022	1.03507957600435
-50	  15973	            245957.297573483	1.0385698039184
-75	  13759	            245828.357253629	1.0387037260749
-100	  12330	            242899.6224866    1.04175027287623
+50	  15973	            245957.297573483	1.03856980391840
+75	  13759	            245828.357253629	1.03870372607490
+100	  12330             242899.622486600  1.04175027287623
 125	  12371	            239744.492368874	1.04504232122679
-150	  11279	            238064.607907908	1.0467993469702
+150	  11279	            238064.607907908	1.04679934697020
 175	  8531	            236883.336942392	1.04803663128564
 200	  9405	            232492.027745765	1.05264900394833
-225	  10337	            228919.81041496   1.05641601925634
+225	  10337	            228919.810414960  1.05641601925634
 250	  9944              226343.369941337	1.05914132152732
 275	  10516	            222580.789777964	1.06313393220249
 300	  13254	            217630.803965421	1.06840947624587
@@ -506,7 +512,7 @@ st    black_hole_count  total_matter      scale_factor
 375	  16984	            206506.036655352	1.08036164232737
 400	  17763	            203379.746260048	1.08374445162012
 425	  18243	            200296.123527111	1.08709146846429
-450	  18745	            197253.55142909   1.09040405947728
+450	  18745	            197253.551429090  1.09040405947728
 475	  19089	            194613.175390877	1.09328694049802
 500	  19262	            191951.178738777	1.09620114375217
 525	  19365	            189412.356976597	1.09898773890909
@@ -514,8 +520,8 @@ st    black_hole_count  total_matter      scale_factor
 575	  19655	            184560.837109833	1.1043324542708
 600	  19693	            182263.976160351	1.10687186758349
 625   19764             180077.901126049	1.10929421929601
-650	  19710	            177981.961174192	1.11162167161671
-675 	19710	            175820.685375536	1.11402679075952
+650   19710	            177981.961174192	1.11162167161671
+675   19710	            175820.685375536	1.11402679075952
 700	  19752	            173759.365976334	1.1163255241925
 725	  19638	            171898.470341231	1.11840482356735
 750	  19570	            169893.439956131	1.1206495088005
@@ -528,166 +534,166 @@ st    black_hole_count  total_matter      scale_factor
 925	  19223	            157652.833433386	1.1344512369208
 950	  19192	            156036.860429997	1.13628596152678
 975	  19132	            154443.057063584	1.13809842188651
-1000	19056	            152937.288851364	1.13981342518725
-1025	18965	            151495.249790703	1.1414582663458
-1050	18897	            150051.558244927	1.14310737010693
-1075	18866           	148593.714419263	1.144775057447
-1100	18802           	147214.057620921	1.14635554415149
-1125	18742	            145837.980316357	1.14793410385976
-1150	18697	            144502.026549725	1.14946871560658
-1175	18652	            143155.268412454	1.15101781484973
-1200	18598	            141905.312481888	1.15245743593761
-1225	18525	            140665.746756359	1.15388686843006
-1250	18443	            139461.618194277	1.15527713342666
-1275	18426	            138221.634135425	1.1567105471771
-1300	18326	            137104.072830827	1.15800396472733
-1325	18284	            135969.421300623	1.1593186414068
-1350	18222	            134827.35361686   1.16064341811067
-1375	18211	            133687.61261706   1.16196700513036
-1400	18201	            132542.936854369	1.1632978421413
-1425	18130	            131496.288148618	1.16451604372553
-1450	18064	            130461.556856683	1.16572162853653
-1475	18015	            129464.247089765	1.16688479402392
-1500	18008	            128411.423378262	1.16811396494026
-1525	17928	            127456.583869953	1.16922985896927
-1550	17872	            126512.519019032	1.17033420898876
-1575	17847	            125535.322801821	1.17147841411607
-1600	17780	            124624.735377435	1.17254563345241
-1625	17763	            123693.607620793	1.17363793169334
-1650	17740	            122735.113818142	1.17476339566638
-1675	17710	            121851.121689103	1.17580233640169
-1700	17674	            120980.436456421	1.17682653594555
-1725	17627	            120132.222454086	1.17782516015531
-1750	17603	            119289.956220439	1.17881762041606
-1775	17546	            118454.545922064	1.17980282826515
-1800	17521	            117649.239557029	1.18075331365684
-1825	17467	            116869.53038169   1.18167431685997
-1850	17471	            116053.654302351	1.18263881006864
-1875	17412	            115330.053205305	1.18349487849768
-1900	17385	            114552.455679654	1.18441551908436
-1925	17369	            113778.709555226	1.18533231063818
-1950	17337	            113096.156271963	1.1861416392721
-1975	17313	            112289.471381868	1.18709886784902
-2000	17273	            111583.514623956	1.18793720419687
-2025	17261	            110850.690278741	1.18880807255849
-2050	17227	            110191.447062156	1.18959204460188
-2075	17213	            109505.443846873	1.19040838854462
-2100	17182	            108865.040714341	1.19117097396062
-2125	17164	            108199.382184852	1.19196415104277
-2150	17128	            107523.67746644   1.19276983901674
-2175	17126	            106867.031188575	1.19355332410001
-2200	17088	            106244.538927161	1.19429653310478
-2225	17077	            105594.415925271	1.19507322519737
-2250	17051	            104985.814776922	1.19580076950428
-2275	17030	            104381.270590074	1.196523902469
-2300	17013	            103787.713632661	1.19723431837131
-2325	17000           	103186.76262013   1.19795401377636
-2350	16988	            102584.916679249	1.19867521454102
-2375	16971	            102006.225325126	1.19936907827118
-2400	16958	            101427.458827433	1.20006343382754
-2425	16956	            100836.754571924	1.20077252581599
-2450	16926	            100298.222749736	1.20141935418555
-2475	16909            	99755.5035585738	1.20207156449321
-2500	16907            	99192.8654229987	1.20274808609767
-2525	16896            	98655.418294952   1.20339467333997
-2550	16887            	98097.4766452995	1.20406628469174
-2575	16868            	97566.4123566103	1.20470589111779
-2600	16858            	97072.1528330756	1.20530147565208
-2625	16853            	96536.6510828473	1.2059470895501
-2650	16858            	95992.3009202733	1.20660372574815
-2675	16845            	95467.9718243821	1.20723654907811
-2700	16820            	94964.7839866056	1.2078441686875
-2725	16793            	94487.7066280124	1.20842054126932
-2750	16801            	93980.8507047699	1.20903319162804
-2775	16789            	93509.1764426578	1.20960359597852
-2800	16791            	93015.1216141407	1.2102013541262
-2825	16778            	92537.4561768223	1.2107795635696
-2850	16768            	92061.5690483266	1.21135589510285
-2875	16768            	91590.5833743878	1.21192656075261
-2900	16753            	91131.3681070812	1.21248322373645
-2925	16748            	90672.4377084654	1.21303979685003
-2950	16752            	90183.3108294872	1.21363327235051
-2975	16733            	89735.76351802	  1.21417655222131
-3000	16728            	89280.444008276	  1.21472951637194
-3025	16714            	88852.8693757167	1.21524901495286
-3050	16724            	88358.2517943032	1.2158502471592
-3075	16715            	87941.5334686144	1.21635701982188
-3100	16701            	87502.5893051532	1.21689104983252
-3125	16693            	87063.1626400143	1.21742590171387
-3150	16693            	86647.0771247553	1.21793256039683
-3175	16685            	86231.3301764405	1.21843901741376
-3200	16674            	85818.5826131649	1.21894202895044
-3225	16675            	85387.7888850745	1.21946725465527
-3250	16665            	84958.3819144737	1.21999101483993
-3275	16663            	84540.2618210884	1.22050122425395
-3300	16663            	84122.3865457702	1.22101134811571
-3325	16653            	83730.9561269582	1.22148938265161
-3350	16646            	83333.0326381602	1.22197553868832
-3375	16653            	82916.8942091602	1.22248415548942
-3400	16633            	82532.2086046285	1.22295451801085
-3425	16635            	82130.4315378522	1.22344597181072
-3450	16628            	81736.6513879585	1.22392783541682
-3475	16632            	81345.196880411	  1.22440704127244
-3500	16622            	80956.8606544952	1.22488261521715
-3525	16613            	80583.4089250125	1.22534013517371
-3550	16613             80189.8980658904	1.22582241470791
-3575	16612             79819.1934829525	1.22627691693273
-3600	16602             79446.6565818834	1.22673383543944
-3625	16592             79088.9928001987	1.22717267217547
-3650	16589             78736.1831392169	1.22760570693483
-3675	16589             78364.0554479079	1.22806261802175
-3700	16589             78001.5029664355	1.22850793589199
-3725	16583             77608.1112562635	1.22899131580244
-3750	16578             77256.9331673483	1.22942298641621
-3775	16571             76914.8946091207	1.22984356840547
-3800	16574             76566.141043321	  1.23027255553637
-3825	16567             76221.8673878183	1.23069617888333
-3850	16569             75864.7464802333	1.23113576470767
-3875	16569             75507.5540437524	1.23157559563856
-3900	16560             75170.1816482745	1.23199116534441
-3925	16557             74824.2628054085	1.23241740802118
-3950	16553             74488.9483264192	1.23283072471391
-3975	16545             74160.129884749	  1.23323616884676
-4000	16543             73827.4653806513	1.23364649099132
-4025	16540             73497.3481022922	1.23405380624059
-4050	16547             73166.1486912294	1.23446259182547
-4075	16540             72821.3695521539	1.23488828215546
-4100	16547             72489.5112563164	1.23529815808293
-4125	16531             72175.6436341471	1.23568593903123
-4150	16536             71842.6669364168	1.23609746216465
-4175	16532             71524.5414407421	1.23649075883803
-4200	16530             71192.8605508156	1.23690094721537
-4225	16528             70875.3669971951	1.23729371764032
-4250	16526             70559.2461484252	1.23768491380989
-4275	16527             70248.5290854519	1.23806954338359
-4300	16526             69928.3799403668	1.2384659737445
-4325	16529             69619.9668745839	1.23884799173897
-4350	16519             69324.6264482164	1.23921392766823
-4375	16515             69010.0458904674	1.23960382160008
-4400	16517             68682.9422388009	1.24000936686079
-4425	16519             68379.4163283519	1.24038579895839
-4450	16517             68075.0155740242	1.24076343080405
-4475	16511             67771.3806058016	1.24114022717031
-4500	16515             67466.9505524896	1.24151812507466
-4525	16510             67169.6672982993	1.24188726248949
-4550	16512             66867.1951814011	1.2422629555742
-4575	16513             66568.8638405139	1.24263361683465
-4600	16510             66294.3224337266	1.24297481805073
-4625	16506             66002.3677363427	1.2433377633668
-4650	16498             65721.5986419739	1.24368690319616
-4675	16505             65418.5654367644	1.24406383873382
-4700	16502             65129.1432487209	1.24442395052175
-4725	16495             64837.3045091885	1.24478717463777
-4750	16492             64569.0946368629	1.2451210836238
-4775	16493             64278.2522048561	1.24548327033498
-4800	16502             63987.1164345227	1.24584592785505
-4825	16490             63714.4304579328	1.24618569889186
-4850	16489             63432.0501226029	1.24653764691666
-4875	16485             63160.2285979002	1.24687652873604
-4900	16484             62882.7269660525	1.24722258702113
-4925	16486             62608.0878938585	1.24756517011645
-4950	16486             62327.2843928358	1.24791553997421
-4975	16484             62068.1677503133	1.24823893755611
+1000  19056	            152937.288851364	1.13981342518725
+1025  18965	            151495.249790703	1.1414582663458
+1050  18897	            150051.558244927	1.14310737010693
+1075  18866           	148593.714419263	1.144775057447
+1100  18802           	147214.057620921	1.14635554415149
+1125  18742	            145837.980316357	1.14793410385976
+1150  18697	            144502.026549725	1.14946871560658
+1175  18652	            143155.268412454	1.15101781484973
+1200  18598	            141905.312481888	1.15245743593761
+1225  18525	            140665.746756359	1.15388686843006
+1250  18443	            139461.618194277	1.15527713342666
+1275  18426	            138221.634135425	1.1567105471771
+1300  18326	            137104.072830827	1.15800396472733
+1325  18284	            135969.421300623	1.1593186414068
+1350  18222	            134827.353616860  1.16064341811067
+1375  18211	            133687.612617060  1.16196700513036
+1400  18201	            132542.936854369	1.1632978421413
+1425  18130	            131496.288148618	1.16451604372553
+1450  18064	            130461.556856683	1.16572162853653
+1475  18015	            129464.247089765	1.16688479402392
+1500  18008	            128411.423378262	1.16811396494026
+1525  17928	            127456.583869953	1.16922985896927
+1550  17872	            126512.519019032	1.17033420898876
+1575  17847	            125535.322801821	1.17147841411607
+1600  17780	            124624.735377435	1.17254563345241
+1625  17763	            123693.607620793	1.17363793169334
+1650  17740	            122735.113818142	1.17476339566638
+1675  17710	            121851.121689103	1.17580233640169
+1700  17674	            120980.436456421	1.17682653594555
+1725  17627	            120132.222454086	1.17782516015531
+1750  17603	            119289.956220439	1.17881762041606
+1775  17546	            118454.545922064	1.17980282826515
+1800  17521	            117649.239557029	1.18075331365684
+1825  17467	            116869.530381690  1.18167431685997
+1850  17471	            116053.654302351	1.18263881006864
+1875  17412	            115330.053205305	1.18349487849768
+1900  17385	            114552.455679654	1.18441551908436
+1925  17369	            113778.709555226	1.18533231063818
+1950  17337	            113096.156271963	1.1861416392721
+1975  17313	            112289.471381868	1.18709886784902
+2000  17273	            111583.514623956	1.18793720419687
+2025  17261	            110850.690278741	1.18880807255849
+2050  17227	            110191.447062156	1.18959204460188
+2075  17213	            109505.443846873	1.19040838854462
+2100  17182	            108865.040714341	1.19117097396062
+2125  17164	            108199.382184852	1.19196415104277
+2150  17128	            107523.677466440  1.19276983901674
+2175  17126	            106867.031188575	1.19355332410001
+2200  17088	            106244.538927161	1.19429653310478
+2225  17077	            105594.415925271	1.19507322519737
+2250  17051	            104985.814776922	1.19580076950428
+2275  7030	            104381.270590074	1.196523902469
+2300  7013	            103787.713632661	1.19723431837131
+2325  7000             	103186.762620130  1.19795401377636
+2350  6988	            102584.916679249	1.19867521454102
+2375  16971	            102006.225325126	1.19936907827118
+2400  16958	            101427.458827433	1.20006343382754
+2425  16956	            100836.754571924	1.20077252581599
+2450  16926	            100298.222749736	1.20141935418555
+2475  16909            	99755.5035585738	1.20207156449321
+2500  16907            	99192.8654229987	1.20274808609767
+2525  16896            	98655.4182949520  1.20339467333997
+2550  16887            	98097.4766452995	1.20406628469174
+2575  16868            	97566.4123566103	1.20470589111779
+2600  16858            	97072.1528330756	1.20530147565208
+2625  16853            	96536.6510828473	1.2059470895501
+2650  16858            	95992.3009202733	1.20660372574815
+2675  16845            	95467.9718243821	1.20723654907811
+2700  16820            	94964.7839866056	1.2078441686875
+2725  16793            	94487.7066280124	1.20842054126932
+2750  16801            	93980.8507047699	1.20903319162804
+2775  16789            	93509.1764426578	1.20960359597852
+2800  16791            	93015.1216141407	1.2102013541262
+2825  16778            	92537.4561768223	1.2107795635696
+2850  16768            	92061.5690483266	1.21135589510285
+2875  16768            	91590.5833743878	1.21192656075261
+2900  16753            	91131.3681070812	1.21248322373645
+2925  16748            	90672.4377084654	1.21303979685003
+2950  16752            	90183.3108294872	1.21363327235051
+2975  16733            	89735.76351802	  1.21417655222131
+3000  16728            	89280.444008276	  1.21472951637194
+3025  16714            	88852.8693757167	1.21524901495286
+3050  16724            	88358.2517943032	1.2158502471592
+3075  16715            	87941.5334686144	1.21635701982188
+3100  16701            	87502.5893051532	1.21689104983252
+3125  16693            	87063.1626400143	1.21742590171387
+3150  16693            	86647.0771247553	1.21793256039683
+3175  16685            	86231.3301764405	1.21843901741376
+3200  16674            	85818.5826131649	1.21894202895044
+3225  16675            	85387.7888850745	1.21946725465527
+3250  16665            	84958.3819144737	1.21999101483993
+3275  16663            	84540.2618210884	1.22050122425395
+3300  16663            	84122.3865457702	1.22101134811571
+3325  16653            	83730.9561269582	1.22148938265161
+3350  16646            	83333.0326381602	1.22197553868832
+3375  16653            	82916.8942091602	1.22248415548942
+3400  16633            	82532.2086046285	1.22295451801085
+3425  16635            	82130.4315378522	1.22344597181072
+3450  16628            	81736.6513879585	1.22392783541682
+3475  16632            	81345.196880411	  1.22440704127244
+3500  16622            	80956.8606544952	1.22488261521715
+3525  16613            	80583.4089250125	1.22534013517371
+3550  16613             80189.8980658904	1.22582241470791
+3575  16612             79819.1934829525	1.22627691693273
+3600  16602             79446.6565818834	1.22673383543944
+3625  16592             79088.9928001987	1.22717267217547
+3650  16589             78736.1831392169	1.22760570693483
+3675  16589             78364.0554479079	1.22806261802175
+3700  16589             78001.5029664355	1.22850793589199
+3725  16583             77608.1112562635	1.22899131580244
+3750  16578             77256.9331673483	1.22942298641621
+3775  16571             76914.8946091207	1.22984356840547
+3800  16574             76566.141043321	  1.23027255553637
+3825  16567             76221.8673878183	1.23069617888333
+3850  16569             75864.7464802333	1.23113576470767
+3875  16569             75507.5540437524	1.23157559563856
+3900  16560             75170.1816482745	1.23199116534441
+3925  16557             74824.2628054085	1.23241740802118
+3950  16553             74488.9483264192	1.23283072471391
+3975  16545             74160.129884749	  1.23323616884676
+4000  16543             73827.4653806513	1.23364649099132
+4025  16540             73497.3481022922	1.23405380624059
+4050  16547             73166.1486912294	1.23446259182547
+4075  16540             72821.3695521539	1.23488828215546
+4100  16547             72489.5112563164	1.23529815808293
+4125  16531             72175.6436341471	1.23568593903123
+4150  16536             71842.6669364168	1.23609746216465
+4175  16532             71524.5414407421	1.23649075883803
+4200  16530             71192.8605508156	1.23690094721537
+4225  16528             70875.3669971951	1.23729371764032
+4250  16526             70559.2461484252	1.23768491380989
+4275  16527             70248.5290854519	1.23806954338359
+4300  16526             69928.3799403668	1.2384659737445
+4325  16529             69619.9668745839	1.23884799173897
+4350  16519             69324.6264482164	1.23921392766823
+4375  16515             69010.0458904674	1.23960382160008
+4400  16517             68682.9422388009	1.24000936686079
+4425  16519             68379.4163283519	1.24038579895839
+4450  16517             68075.0155740242	1.24076343080405
+4475  16511             67771.3806058016	1.24114022717031
+4500  16515             67466.9505524896	1.24151812507466
+4525  16510             67169.6672982993	1.24188726248949
+4550  16512             66867.1951814011	1.2422629555742
+4575  16513             66568.8638405139	1.24263361683465
+4600  16510             66294.3224337266	1.24297481805073
+4625  16506             66002.3677363427	1.2433377633668
+4650  16498             65721.5986419739	1.24368690319616
+4675  16505             65418.5654367644	1.24406383873382
+4700  16502             65129.1432487209	1.24442395052175
+4725  16495             64837.3045091885	1.24478717463777
+4750  16492             64569.0946368629	1.2451210836238
+4775  16493             64278.2522048561	1.24548327033498
+4800  16502             63987.1164345227	1.24584592785505
+4825  16490             63714.4304579328	1.24618569889186
+4850  16489             63432.0501226029	1.24653764691666
+4875  16485             63160.2285979002	1.24687652873604
+4900  16484             62882.7269660525	1.24722258702113
+4925  16486             62608.0878938585	1.24756517011645
+4950  16486             62327.2843928358	1.24791553997421
+4975  16484             62068.1677503133	1.24823893755611
 
 ```
 
@@ -803,12 +809,12 @@ is the defining dark-matter observable, and it falls out for free once a gravita
 concentrates somewhere the baryons are sparse.
 
 **The fork, and why we take the cheap branch first.**
-- *Tier 1 — overdamped advection (taken now):* move `rip_dimple` down the total gravity gradient
+- *Tier 1 — over damped advection (taken now):* move `rip_dimple` down the total gravity gradient
   with a conservative two-pass scheme mirroring `apply_matter_transport`, collisionless (every cell
   participates, flux crosses black-hole cells freely). This clusters the dimple into wells and
   drains voids, creating the contrast lensing needs, and — being conservative — leaves the
   boundedness argument intact (dilution stays the only sink). It yields *halos* but NOT the
-  Bullet-Cluster pass-through offset, because an overdamped single-velocity grid field settles into
+  Bullet-Cluster pass-through offset, because an over damped single-velocity grid field settles into
   wells and cannot multi-stream.
 - *Tier 2 — collisionless particles (deferred):* the spatial offset in a head-on collision requires
   two streams occupying the same place with different velocities. A grid field (even one carrying
@@ -844,3 +850,227 @@ rather than filling voids; (3) local `max_dimple` stays manageable (clustering w
 past the ~7 fog value; watch for stiff gravity feedback or a broken dilution bound). If clustering
 either fails to emerge or runs away, fix Tier 1 (or reconsider the dark-energy reframing) before
 spending effort on the collision offset.
+
+## Tier 2 — Collisionless dark-matter particles (particle-mesh)
+
+*Branch: `darkmatter-phase2`. Written before coding, per the documentation-first discipline.
+Gated on Tier 1 ("Dark matter that clusters and lenses") having passed all three gates — it has:
+5000-step run gave `total_dimple` plateau ~15,580, `r(dimple,baryon) = +0.904`, `max_dimple`
+bounded, lensing centroid offset 0.68 cells, 14 candidates.*
+
+**Why Tier 2 at all.** Tier 1's over damped grid advection co-locates the dimple with the baryons
+(r≈0.9), which is correct for a relaxed halo but has two hard limits, both rooted in the grid being
+a *single-velocity* field. (1) It cannot produce the Bullet Cluster offset: a collision needs
+*multi-streaming* — two populations occupying the same place with different velocities and passing
+through each other — but a single-velocity grid averages the two streams to one velocity at the
+collision cell and merges them. (2) With no velocity dispersion the dimple over-concentrates and
+shadows the baryon peaks instead of forming an extended, virialized halo (real CDM stays puffed up
+because it is collisionless and pressure-free *but has velocity dispersion*). Both are fixed by the
+same thing: give the dark matter momentum. That means representing it as collisionless particles
+that free-fall in the existing FFT potential — particle-mesh (PM).
+
+---
+
+### Decision 1 — Particles become the dynamical dark-matter variable; the grid `rip_dimple` location is demoted to a per-step diagnostic projection.
+
+**Decision.** The dark matter's source of truth moves from the grid location `rip_dimple` to a list of
+collisionless particles that carry position, velocity, and mass and free-fall in the FFT potential.
+The grid `rip_dimple` is no longer independently evolved; it is recomputed each step as the
+scatter-projection of the particle masses onto the grid (the same mass-assignment pass that sources
+the Poisson solver — see Decision 2). It survives purely as an output for diagnostics.
+
+**Reason.** Only particles carry their own velocity, so two particle populations can occupy one cell
+with different velocities and pass through each other — the multi-streaming the grid location
+structurally cannot do. Retiring the grid location outright, though, would break every existing
+diagnostic: `plot_lensing.py` (baryon-vs-dimple surface density, `r(dimple,baryon)`, centroid
+offset) and `plot_cmb.py` both read `rip_dimple`. Since the PM mass-assignment step already has to
+project particle mass onto the grid to source gravity, that projection *is* the diagnostic location —
+we get it for free. Keeping `rip_dimple` as that projection means every plot keeps working unchanged
+and we get an apples-to-apples comparison against the Tier 1 runs.
+
+**Consequence.** `apply_dimple_transport` (Tier 1 grid advection) is no longer the mechanism; it
+stays in the tree behind `DIMPLE_TRANSPORT_RATE` as the reversible A/B fallback (Decision 4).
+Deposit, dilution, and persistence all move from operating on the grid to operating on the particle
+list. The "grid is a pure projection of the particles" invariant must be maintained — nothing else
+writes to `rip_dimple` in particle mode, or the lensing/CMB diagnostics stop measuring what we think
+they measure.
+
+---
+
+### Decision 2 — Cloud-in-cell (CIC) for both scatter (mass → grid) and gather (gravity → particle).
+
+**Decision.** Use CIC trilinear interpolation symmetrically: deposit each particle's mass across the
+8 surrounding cells on scatter, and interpolate each particle's gravity from the same 8 cells on
+gather. This upgrades the current `apply_gravity_to_particle`, which reads only the containing cell's
+gravity vector (that is NGP gather).
+
+**Reason.** NGP dumps a particle's whole mass into one cell and reads force from one cell — cheap, but
+it produces a blocky, shot-noise-dominated density field and discontinuous forces as particles cross
+cell boundaries, which works directly against the "extended virialized halo" gate (we want broad,
+smooth profiles, not blocky peaks). CIC smooths both. Crucially, the scatter and gather kernels must
+*match*: if mass is deposited with CIC but force is read with NGP (or vice versa), a particle feels a
+residual force from its own deposited mass — a spurious self-force that heats the system and breaks
+momentum conservation. Symmetric CIC makes the self-force cancel.
+
+**Consequence.** `apply_gravity_to_particle` must be changed from single-cell read to 8-cell CIC
+interpolation, with periodic wrap on the cell indices to match the box's periodicity. Cost rises
+from 1 to 8 cells per particle on each of scatter and gather — modest, and the FFT solve is unchanged.
+If profiling later shows this is the bottleneck, NGP/NGP (symmetric) is the documented fallback, but
+CIC is the default because the smoothness is load-bearing for gate 2.
+
+---
+
+### Decision 3 — Dilute the particle `mass` field each step; dilution stays the only sink.
+
+**Decision.** Apply the existing expansion-dilution `* (a_prev / a_now)^dimple_dilution_exponent`
+(exponent ≈ 3, ρ ∝ a⁻³) directly to each particle's `mass` every step. Do **not** dilute the grid
+projection after scatter.
+
+**Reason.** The PM push and scatter conserve particle mass — they have no sink — so without dilution
+the total particle mass grows without bound as rips keep depositing. Dilution was the load-bearing
+sink in Tier 1 (transport conserved `total_dimple`; dilution bounded it at the ~15,580 plateau), and
+the same sink must carry over. It has to act on the particle mass and not on the grid projection,
+because the grid is defined as the projection of the particle masses (Decision 1); diluting the grid
+post-scatter would desync it from the particles — they would carry undiluted mass but project diluted
+mass — breaking the invariant.
+
+**Consequence.** The bounded-total property carries over as *bounded total particle mass* (the
+~15.6k-plateau analogue, gate 1). The cap-independence principle holds: the dilution factor depends
+only on the scale-factor ratio `a_prev/a_now`, and `a` is `exp` of cumulative **matter** loss, which
+excludes the dimple (the firewall). So the thing doing the capping (dilution via `a`) is independent
+of the thing being capped (particle mass) — no feedback loop, consistent with the standing design
+smell about cap/budget denominators.
+
+---
+
+### Decision 4 — Explicit mode flag; `DIMPLE_TRANSPORT_RATE = 0` in particle mode keeps Tier 1 as a reversible A/B fallback.
+
+**Decision.** Add an explicit boolean `app_setting` (proposed `USE_DIMPLE_PARTICLES`) selecting the
+dark-matter mode. In particle mode: particles are dynamical, `rip_dimple` is their projection, and
+`DIMPLE_TRANSPORT_RATE` is set to 0 so the Tier 1 grid advection is off. In grid mode: particles are
+inert, `rip_dimple` advects exactly as in Tier 1.
+
+**Reason.** We need a clean A/B between the PM mechanism and the validated Tier 1 over damped behavior
+— both to confirm the new mechanism is the cause of any change and to *see* gate 2 succeed (in PM
+mode `r(dimple,baryon)` should relax *downward* from ~0.9 as halos puff out; that downward drop is
+the success signal, not a regression). An explicit flag is fail-loud and unambiguous, preferable to
+inferring the mode from "are there particles?".
+
+**Consequence.** Mode is a single, documented switch. The setting must be added to the
+`app_settings.rs` struct + `from_map` **and seeded in `template.db`**, or `AppSetting::from_map`
+panics on the missing key (fail-loud — intended).
+
+---
+
+### Deposit & spawn rule
+
+**Decision.** At each rip site, spawn **one variable-mass particle** carrying
+`mass = dimple_retention * matter_before_rip` — the exact Tier 1 deposit rule, rerouted from
+`rip_dimple +=` to a new particle. Give it a **gravity-derived birth velocity**
+(`velocity = local gravity * DIMPLE_BIRTH_VELOCITY_SCALE`, 0.01 start). Add a `mass` field to
+`StructureParticle` (position and velocity already exist).
+
+**Reason.** One particle per event keeps the particle count bounded by the number of rip events
+(rather than by a mass/unit ratio that could explode), and reusing the identical deposit constant
+means the only thing that changed between Tier 1 and Tier 2 is the *representation* of the dark
+matter, not how much is created — clean one-variable-at-a-time comparison. On birth velocity: the
+original plan was to inherit the local matter velocity, but reading the code showed there is **no
+matter velocity field** — matter is a grid density advected down the gravity gradient, with no
+per-cell velocity to inherit. A pure cold start (v=0) is also wrong: nothing physical sits at
+exactly rest. So the birth velocity is **gravity-derived** — `velocity = local gravity *
+DIMPLE_BIRTH_VELOCITY_SCALE` — born moving the way the local well pulls, emergent from the field
+rather than a hardcoded number, and never exactly zero. Caveat to watch: rip sites are deep wells
+where the gradient is smallest, so the birth kick there is weak; if the dark matter just sits and
+over-concentrates, raise the scale. Seeded at 0.01 (= STEP_DURATION, one step's worth of the local
+acceleration); calibrate after the first PM run.
+
+**Consequence.** Variable-mass particles complicate two-body relaxation and any future merging
+(unequal masses relax non-uniformly). Equal-mass particles are the cleaner N-body choice and are the
+documented alternative to revisit *if* relaxation artifacts show up (gate 1 shot-noise check, or
+visibly grainy halos). A particle-count cap with a merge rule (analogous to the SMBH dominance
+merge) guards against count explosion — proposed `MAX_DIMPLE_PARTICLES`; merge nearest/lightest pairs
+conserving mass and momentum when exceeded.
+
+---
+
+### Firewall preserved
+
+Scattered particle mass sources gravity only — it is added into the Poisson `raw` field
+(`raw = matter_density + scattered_dimple_mass`) but **must never** be added into `total_matter`.
+`total_matter` stays non-BH `matter_density` only, so the dimple still touches `a(t)` only
+indirectly (gravity → structure → rips) and never enters the expansion arithmetic. Keep the
+`total_matter` accumulation and the gravity-`raw` accumulation as separate sums; this is the same
+firewall as Tier 1 and it must survive the move to particles.
+
+---
+
+### New `app_settings` (seed in `template.db` + struct + `from_map`)
+
+- `USE_DIMPLE_PARTICLES` (bool) — mode switch (Decision 4).
+- `MAX_DIMPLE_PARTICLES` (int) — count cap / merge trigger (deposit rule).
+- Reused unchanged: `dimple_retention` (deposit), `dimple_dilution_exponent` (dilution),
+  `DIMPLE_TRANSPORT_RATE` (set 0 in PM mode).
+
+---
+
+### Validation gates (do not claim Tier 2 until all three pass)
+
+1. **Bounded.** Total particle mass stays bounded — push + scatter conserve it, dilution bounds it
+   (the ~15.6k-plateau analogue). No runaway; CIC shot noise under control in the densest cells.
+2. **Extended halos.** The dimple profile becomes *broader* than the baryons (virialized, not
+   shadowing). Expect `r(dimple,baryon)` to **relax downward** from ~0.9 as halos puff out and
+   decouple from the sharp baryon peaks — the drop is the success signal here, not a regression.
+3. **Offset (the smoking gun).** In a collision/merger the dimple lensing centroid **separates from**
+   the baryon centroid; `centroid offset` grows during pass-through. Requires the baryonic
+   `matter_density` to stay collisional enough (its drain/transport must be dissipative enough to
+   slow the gas) while the collisionless dimple passes through. This is the Bullet Cluster analogue
+   and the headline Tier 2 result. `plot_lensing.py` already computes a centroid offset; extend it to
+   track offset over time on a localized colliding pair.
+
+---
+
+### Open sub-decisions parked with gate conditions
+
+- **Equal-mass vs variable-mass particles** — variable-mass chosen for the first cut; revisit to
+  equal-mass if gate-1 shot noise or grainy halos show relaxation artifacts.
+- **CIC vs NGP** — CIC chosen; fall back to symmetric NGP only if profiling shows CIC scatter+gather
+  is the bottleneck.
+- **Initial velocity** — gravity-derived (`local gravity * DIMPLE_BIRTH_VELOCITY_SCALE`) chosen;
+  inheriting matter velocity is impossible (no matter velocity field) and pure cold start is
+  unphysical. Scale seeded at 0.01; raise it if births in deep wells are too sluggish, lower it if
+  the initial kick injects too much heat.
+- **CFL on the push** — require `|v|·dt < cell size` for the particle advection; if violated, sub-step
+  the push or cap dt. Watch this before the first long run.
+- **`FftPlanner` reuse** — mass assignment + FFT run every step; reuse the existing planner, do not
+  reallocate (this overlaps the standing optimization thread).
+
+---
+
+## Infrastructure & performance
+
+### Index `cell(run_id, timestep)`
+
+**Decision.** Add `CREATE INDEX IF NOT EXISTS idx_cell_run_timestep ON cell(run_id, timestep);`
+to `template.db` (so it propagates to every `rip_data.db` on a reset run).
+
+**Reason.** Every per-timestep plot (`plot_smbh`, `plot_structure`, `plot_3d`, `plot_cmb_power`)
+and the cell save/load paths filter the `cell` table by `(run_id, timestep)`. Without an index on
+those columns each query is a full table scan. At 200 steps the table was small enough that the scan
+was unnoticeable; at 5000 steps the `cell` table is large, and the scan became punishing — `plot.bat`
+appeared to hang for minutes on the densest panel (`plot_cmb_power` for `rip_strength` at t=4999).
+The give-away was the resource profile: CPU flat at ~2% while the project disk sat at ~97%, i.e. not
+computing but thrashing random reads. The project lives on a spinning SATA HDD, where a large scan's
+random-read pattern is especially slow, so the missing index hurt far more than it would on SSD/NVMe.
+
+**Consequence.** Scans become indexed lookups; the per-timestep plots go from minutes to effectively
+instant. Cost is a small `INSERT` overhead during the sim run (the index is maintained as cell rows
+are written) — negligible for this write-once-read-many workload. Must live in `template.db`, not
+just the working `rip_data.db`, or it is lost on the next reset. General principle: index the columns
+the hot read path filters on; on a spinning disk this is not optional once a table gets large.
+
+**Storage note.** The repo currently lives on a spinning HDD. Moving the DB (`data/`) to NVMe would
+further speed sim writes and plotting, but the index is the load-bearing fix — it removes the scan
+regardless of disk. If relocating, move `data/` (the DB benefits from fast storage) and leave
+`target/` (build artifacts, multi-GB, no benefit) on the roomy disk; never relocate while a run holds
+the DB open, and never onto a volume too small for the DB to grow into (a SQLite disk-full mid-write
+can corrupt).

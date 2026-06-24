@@ -9,7 +9,7 @@ use crate::galaxy::{Galaxy, apply_smbh_competition, build_membership, find_galax
 use crate::gravity::compute_gravity_fft;
 use crate::helpers::black_hole::{revert_black_hole, set_as_black_hole};
 use crate::helpers::grid::{populate_grid, seed_initial_curvature};
-use crate::helpers::particle::{apply_gravity_to_particle, initialize_particles, map_particle_to_cell};
+use crate::helpers::particle::{apply_gravity_to_particle, dilute_dimple_particles, dimple_birth_state, initialize_particles, map_particle_to_cell, push_dimple_particles, scatter_dimple_to_grid};
 use crate::helpers::rip::compute_cell_rip_strength;
 use crate::helpers::transport::{apply_dimple_transport, apply_matter_transport};
 use crate::initial_geometry::InitialGeometry;
@@ -128,8 +128,14 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                 velocity_y: vy,
                 velocity_z: vz,
                 run_id: run.run_id,
+                mass: 0.0,
             })
             .collect();
+
+        // Tier 2: dark-matter dimple particles (in-memory; their footprint is
+        // the scattered grid rip_dimple, which every existing diagnostic reads).
+        // Stays empty unless use_dimple_particles spawns them at rip sites.
+        let mut dimple_particles: Vec<StructureParticle> = Vec::new();
 
         let raw_density = Arc::new(Mutex::new(vec![
             vec![vec![0.0; app_settings.inf_grid_depth]; app_settings.inf_grid_width];
@@ -218,6 +224,12 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
             // we're asking "was the universe stable enough last step for stars to form?"
             let matter_delta_snapshot = previous_matter_delta;
 
+            // Tier 2: thread-safe collector for particles spawned by rips this
+            // step (cell pass is parallel). run_id copied out to avoid borrowing run.
+            let run_id = run.run_id;
+            let new_dimple_particles: Arc<Mutex<Vec<StructureParticle>>> = Arc::new(Mutex::new(Vec::new()));
+            let existing_dimple_count = dimple_particles.len();
+
             grid.par_iter_mut().enumerate().for_each(|(height, col)| {
                 let running = Arc::clone(&running);
                 let matter_delta = matter_delta_snapshot;
@@ -288,7 +300,42 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                             // addition (the intentional GR break). Accumulates across
                             // repeated rips at a site; bounded by expansion dilution.
                             if cell.is_black_hole && !was_black_hole {
-                                cell.rip_dimple += app_settings.dimple_retention * matter_before_rip;
+                                let deposit = app_settings.dimple_retention * matter_before_rip;
+                                if app_settings.use_dimple_particles {
+                                    // Tier 2: spawn a dark-matter particle instead of writing
+                                    // the grid. Birth velocity = local gravity * scale (nothing
+                                    // is truly at rest); rip_dimple is rebuilt from scatter later.
+                                    let cap = app_settings.max_dimple_particles as usize;
+                                    let mut bucket = new_dimple_particles.lock().unwrap();
+                                    if cap == 0 || existing_dimple_count + bucket.len() < cap {
+                                        let (pos, vel) = dimple_birth_state(
+                                            height,
+                                            width,
+                                            depth,
+                                            app_settings.inf_grid_height,
+                                            app_settings.inf_grid_width,
+                                            app_settings.inf_grid_depth,
+                                            (cell.gravity_x, cell.gravity_y, cell.gravity_z),
+                                            app_settings.dimple_birth_velocity_scale,
+                                        );
+                                        bucket.push(StructureParticle {
+                                            structure_particle_id: 0,
+                                            time: timestep as f64,
+                                            rip_strength: 0.0,
+                                            scale_factor,
+                                            position_x: pos.0,
+                                            position_y: pos.1,
+                                            position_z: pos.2,
+                                            velocity_x: vel.0,
+                                            velocity_y: vel.1,
+                                            velocity_z: vel.2,
+                                            run_id,
+                                            mass: deposit,
+                                        });
+                                    }
+                                } else {
+                                    cell.rip_dimple += deposit;
+                                }
                             }
                         }
 
@@ -322,6 +369,12 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                     });
                 });
             });
+
+            // Tier 2: fold this step's freshly spawned dark-matter particles in.
+            if app_settings.use_dimple_particles {
+                let mut spawned = new_dimple_particles.lock().unwrap();
+                dimple_particles.append(&mut spawned);
+            }
 
             // Compute gravity for all cells at once via FFT
             let density_snapshot = {
@@ -402,7 +455,9 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
             // density contrast that lensing needs. Conservative (redistributes,
             // does not create/destroy); dilution remains the sole sink, so the
             // validated boundedness is intact. dimple_transport_rate = 0 disables.
-            apply_dimple_transport(&mut grid, &app_settings, STEP_DURATION);
+            if !app_settings.use_dimple_particles {
+                apply_dimple_transport(&mut grid, &app_settings, STEP_DURATION);
+            }
 
             // Process mergers — smaller galaxy absorbed into larger.
 
@@ -439,15 +494,37 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
             // holds.
             if scale_factor > scale_factor_prev && scale_factor_prev > 0.0 {
                 let dilution = (scale_factor_prev / scale_factor).powf(app_settings.dimple_dilution_exponent);
-                grid.par_iter_mut().for_each(|col| {
-                    col.iter_mut().for_each(|row| {
-                        row.iter_mut().for_each(|cell| {
-                            if cell.rip_dimple > 0.0 {
-                                cell.rip_dimple *= dilution;
-                            }
+                if app_settings.use_dimple_particles {
+                    // Tier 2: dilute particle masses (the grid projection is rebuilt
+                    // from scatter, so diluting it would desync it from the particles).
+                    dilute_dimple_particles(&mut dimple_particles, dilution);
+                } else {
+                    grid.par_iter_mut().for_each(|col| {
+                        col.iter_mut().for_each(|row| {
+                            row.iter_mut().for_each(|cell| {
+                                if cell.rip_dimple > 0.0 {
+                                    cell.rip_dimple *= dilution;
+                                }
+                            });
                         });
                     });
-                });
+                }
+            }
+
+            // Tier 2: advance dark-matter particles in this step's gravity field,
+            // then rebuild the grid rip_dimple projection (CIC) from their new
+            // positions. The log below, the lensing flag, and save all read that
+            // projection, so they keep working unchanged.
+            if app_settings.use_dimple_particles {
+                push_dimple_particles(
+                    &mut dimple_particles,
+                    &grid,
+                    app_settings.inf_grid_height,
+                    app_settings.inf_grid_width,
+                    app_settings.inf_grid_depth,
+                    STEP_DURATION,
+                );
+                scatter_dimple_to_grid(&dimple_particles, &mut grid, app_settings.inf_grid_height, app_settings.inf_grid_width, app_settings.inf_grid_depth);
             }
 
             // TEMP INSTRUMENT (darkmatter-phase1): watch the dimple field for runaway.
@@ -474,9 +551,16 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                         }
                     }
                 }
+                let dimple_particle_mass: f64 = dimple_particles.iter().map(|p| p.mass).sum();
                 let message = format!(
-                    "t={}: max_dimple={:.4e}, total_dimple={:.4e}, dimpled_cells={}, lensing_candidates={}",
-                    timestep, max_dimple, total_dimple, dimpled_cells, lensing_candidates
+                    "t={}: max_dimple={:.4e}, total_dimple={:.4e}, dimpled_cells={}, lensing_candidates={}, dimple_particles={}, dimple_particle_mass={:.4e}",
+                    timestep,
+                    max_dimple,
+                    total_dimple,
+                    dimpled_cells,
+                    lensing_candidates,
+                    dimple_particles.len(),
+                    dimple_particle_mass
                 );
                 _ = db.log_message(run.run_id, MODULE, LogLevel::Info, &message);
             }

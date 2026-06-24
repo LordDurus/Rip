@@ -6,6 +6,7 @@
 pub struct Cell {
     /// Unique identifier for this cell in the database
     pub cell_id: i64,
+    /// Foreign key to thec ell_position table
     pub cell_position_id: i64,
     /// Simulation timestep at which this cell state was recorded
     pub timestep: usize,
@@ -19,7 +20,7 @@ pub struct Cell {
     pub is_black_hole: bool,
     /// Strength of the rip field in this cell
     pub rip_strength: f64,
-    /// legitimately NULL for non-BH cells
+    /// Id of the linked black hole; legitimately NULL for non-BH cells
     pub black_hole_id: Option<u64>,
     /// Cosmological scale factor at this timestep
     pub scale_factor: f64,

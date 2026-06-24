@@ -7,7 +7,7 @@ setlocal
 
 :: Defaults
 set run_id=1
-set timestep=199
+set timestep=4999
 
 :: Override if arguments provided
 if not "%~1"=="" set run_id=%~1
@@ -17,6 +17,7 @@ echo Running plots for run_id=%run_id%, timestep=%timestep%
 
 del /q output\*.png 2>nul
 del /q output\*.html 2>nul
+del /q output\*.txt 2>nul
 
 cd scripts
 py export_log.py --run-id %run_id%
@@ -33,6 +34,7 @@ py plot_3d.py --run-id %run_id% --timestep %timestep% --density-percentile 95
 py plot_matter.py --run-id %run_id%
 py plot_smbh.py --run-id %run_id% --timestep %timestep%
 py plot_galaxy.py --run-id %run_id% --timestep %timestep%
+py combine_plots.py --run-id %run_id% --folder ../output
 cd ..
 
 echo Done.
