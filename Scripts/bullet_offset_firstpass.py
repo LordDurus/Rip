@@ -30,6 +30,7 @@ Examples:
 """
 
 import argparse
+import json
 import sqlite3
 from pathlib import Path
 
@@ -368,6 +369,9 @@ def main():
                         help="Suppress the per-sample coarse trajectory table "
                              "(keeps the summary + warnings). Use when redirecting "
                              "into validation.txt to avoid hundreds of lines.")
+    parser.add_argument("--json", action="store_true",
+                        help="Also print one machine-readable JSON line with the "
+                             "closest-approach result (for the sweep harness).")
     args = parser.parse_args()
 
     if not DB_PATH.exists():
@@ -399,6 +403,22 @@ def main():
 
     report(best, coarse, ncol, args.window, args.coarse_stride,
            baseline, used_fallback, show_trajectory=not args.no_trajectory)
+
+    if args.json:
+        sep = abs(best["separation"])
+        print("RESULT_JSON " + json.dumps({
+            "run_id": run_id,
+            "timestep": best["timestep"],
+            "separation": round(sep, 3),
+            "initial_separation": round(baseline, 3),
+            "left_offset": (None if best["left_offset"] is None
+                            else round(best["left_offset"], 3)),
+            "right_offset": (None if best["right_offset"] is None
+                             else round(best["right_offset"], 3)),
+            "window": args.window,
+            "overlap": sep < 2 * args.window,
+            "used_fallback": used_fallback,
+        }))
 
     if not args.no_plot:
         make_plot(coarse, best, run_id)

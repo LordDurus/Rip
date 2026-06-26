@@ -69,8 +69,7 @@ pub struct AppSetting {
     pub rip_density_weight: f64,
     /// Controls the long-term exponential decay (self-healing) of the rip location.
     pub rip_evaporation_rate: f64,
-    /// Number of independent simulation runs.
-    pub num_runs: usize,
+
     pub initial_geometry: String,
     // Uniform params
     /// Constant matter density applied to every cell when geometry is "uniform".
@@ -346,7 +345,6 @@ impl AppSetting {
             initial_geometry: get_string("INITIAL_GEOMETRY"),
             uniform_density: get_f64("UNIFORM_DENSITY"),
             transport_rate: get_f64("TRANSPORT_RATE"),
-            num_runs: get_usize("NUM_RUNS"),
             num_cores: get_u32("NUM_CORES"),
             matter_expansion_rate: get_f64("MATTER_EXPANSION_RATE"),
             accretion_rate: get_f64("ACCRETION_RATE"),
