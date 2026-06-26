@@ -11,7 +11,7 @@ use crate::helpers::black_hole::{revert_black_hole, set_as_black_hole};
 use crate::helpers::grid::{populate_grid, seed_initial_curvature};
 use crate::helpers::particle::{apply_gravity_to_particle, dilute_dimple_particles, dimple_birth_state, initialize_particles, map_particle_to_cell, push_dimple_particles, scatter_dimple_to_grid};
 use crate::helpers::rip::compute_cell_rip_strength;
-use crate::helpers::transport::{apply_dimple_transport, apply_matter_transport};
+use crate::helpers::transport::{apply_dimple_transport, apply_gas_momentum, apply_matter_transport};
 use crate::initial_geometry::InitialGeometry;
 use colored::Colorize;
 use crossterm::event::{self, Event, KeyCode, KeyEvent};
@@ -72,6 +72,11 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
         );
 
         let mut grid = vec![vec![vec![Cell::new(); app_settings.inf_grid_depth]; app_settings.inf_grid_width]; app_settings.inf_grid_height];
+
+        // In-memory gas bulk-velocity field (momentum = memory). Persists across
+        // steps, zeroed at start, NOT a Cell column (storage wall) and NOT persisted.
+        // Inert unless gas_momentum_enabled; its footprint is the motion it produces.
+        let mut gas_velocity: Vec<Vec<Vec<[f64; 3]>>> = vec![vec![vec![[0.0f64; 3]; app_settings.inf_grid_depth]; app_settings.inf_grid_width]; app_settings.inf_grid_height];
 
         let mut galaxies = seed_initial_curvature(&mut grid, &app_settings, db);
         Galaxy::assign_run_id(&mut galaxies, run.run_id);
@@ -449,7 +454,13 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                     });
                 });
             });
-            apply_matter_transport(&mut grid, &app_settings, STEP_DURATION);
+            if app_settings.gas_momentum_enabled {
+                // Bullet Cluster: gas carries momentum (inertia) and shocks/lags via
+                // ram-pressure drag. Replaces the overdamped transport in this mode.
+                apply_gas_momentum(&mut grid, &mut gas_velocity, &app_settings, STEP_DURATION);
+            } else {
+                apply_matter_transport(&mut grid, &app_settings, STEP_DURATION);
+            }
             // Tier 1: collisionless dimple advection. The dark-matter dimple falls
             // down the total gravity gradient and clusters into wells, carving the
             // density contrast that lensing needs. Conservative (redistributes,

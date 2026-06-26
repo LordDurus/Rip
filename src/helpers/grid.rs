@@ -83,31 +83,40 @@ pub fn populate_grid(
             }
         }
 
-        InitialGeometry::BulletCluster { sigma, peak_density } => {
-            // Phase-1a: a SINGLE Gaussian clump at the box center. It virializes
-            // and grows its own EMERGENT dimple halo via the normal rip path
-            // (the momentum channel does not exist yet). Phase-1b will mirror
-            // this into two clumps offset along the WIDTH axis for the collision.
+        InitialGeometry::BulletCluster { sigma, peak_density, separation } => {
+            // One Gaussian clump at box center (separation == 0, formation), or a
+            // colliding PAIR offset +/- separation from center along the WIDTH axis
+            // (separation > 0). Only the baryon overdensities are seeded; the dimple
+            // halos are EMERGENT (rips), never painted in.
             //
             // AXIS CONVENTION: create_data allocates grid[height][width][depth]
             // (outer = height, middle = width, inner = depth). The locals named
-            // depth/height/width above are SWAPPED relative to that allocation
-            // (harmless for the isotropic random blobs, a trap for directional
-            // placement), so index explicitly here. Collision axis = WIDTH = the
-            // middle index, which is where phase-1b will offset the pair.
+            // depth/height/width above are SWAPPED relative to that allocation, so
+            // index explicitly here. Collision axis = WIDTH = the middle index.
+            //
+            // PERIODIC-STALL NOTE: two equal clumps at exactly half-box separation
+            // feel equal pull both ways and never fall together. Keep
+            // separation < n_w/4 so the pair (2*separation apart) stays under the
+            // half-box stall and falls together the short way.
             let n_h = grid.len();
             let n_w = if n_h > 0 { grid[0].len() } else { 0 };
             let n_d = if n_w > 0 { grid[0][0].len() } else { 0 };
-            let (ch, cw, cd) = (n_h as f64 / 2.0, n_w as f64 / 2.0, n_d as f64 / 2.0);
+            let (ch, cd) = (n_h as f64 / 2.0, n_d as f64 / 2.0);
+            let cw = n_w as f64 / 2.0;
+            let centers: Vec<f64> = if *separation == 0 { vec![cw] } else { vec![cw - *separation as f64, cw + *separation as f64] };
             let two_sigma2 = 2.0 * sigma * sigma;
             for h in 0..n_h {
                 for w in 0..n_w {
                     for d in 0..n_d {
                         let dh = h as f64 - ch;
-                        let dw = w as f64 - cw;
                         let dd = d as f64 - cd;
-                        let r2 = dh * dh + dw * dw + dd * dd;
-                        grid[h][w][d].matter_density = peak_density * (-r2 / two_sigma2).exp();
+                        let mut sum = 0.0;
+                        for &cwc in &centers {
+                            let dw = w as f64 - cwc;
+                            let r2 = dh * dh + dw * dw + dd * dd;
+                            sum += peak_density * (-r2 / two_sigma2).exp();
+                        }
+                        grid[h][w][d].matter_density = sum;
                     }
                 }
             }

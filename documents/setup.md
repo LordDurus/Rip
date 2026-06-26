@@ -45,6 +45,7 @@ These are declared in `Cargo.toml` and fetched automatically on first `cargo bui
 | `ctrlc` | 3 | Graceful Ctrl-C handling (clean run shutdown) |
 | `crossterm` | 0.27 | Terminal control |
 | `colored` | 3.1.1 | Colored terminal output |
+| `oxipng` | 10.1.1 | Used to compress PNGs |
 
 ### Build & run
 

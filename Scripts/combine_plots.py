@@ -31,6 +31,7 @@ import argparse
 import re
 import sys
 from pathlib import Path
+import subprocess
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -59,10 +60,7 @@ def load_font(size):
             return ImageFont.truetype(name, size)
         except (OSError, IOError):
             continue
-    try:
-        return ImageFont.load_default(size=size)  # Pillow >= 10
-    except TypeError:
-        return ImageFont.load_default()
+    return ImageFont.load_default()
 
 
 def detect_run(pngs):
@@ -78,7 +76,6 @@ def detect_run(pngs):
 def text_size(draw, text, font):
     box = draw.textbbox((0, 0), text, font=font)
     return box[2] - box[0], box[3] - box[1]
-
 
 def main():
     ap = argparse.ArgumentParser(description="Combine run PNGs into one validation sheet.")
@@ -115,7 +112,8 @@ def main():
     else:
         run_label = "all"
 
-    out_path = Path(args.output) if args.output else folder / f"validation_run{run if run is not None else 0}.png"
+    default_run = run if run is not None else 0
+    out_path = Path(args.output) if args.output else folder / f"validation_run{default_run}.png"
     # Belt-and-suspenders: never let the output be one of its own inputs.
     pngs = [p for p in pngs if p.resolve() != out_path.resolve()]
     if not pngs:
@@ -182,8 +180,10 @@ def main():
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(out_path)
-    print(f"Wrote {out_path.resolve()}  ({sheet.width} x {sheet.height} px)")
+    file_path = out_path.resolve()
+    subprocess.run(["oxipng", "-o", "6", str(file_path)], check=True)
 
+    print(f"Wrote {file_path}  ({sheet.width} x {sheet.height} px)")
 
 if __name__ == "__main__":
     main()

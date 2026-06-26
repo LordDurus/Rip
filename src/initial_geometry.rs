@@ -22,6 +22,7 @@ pub enum InitialGeometry {
     BulletCluster {
         sigma: f64,
         peak_density: f64,
+        separation: usize,
     },
     Custom, // Reads from custom_density table
 }
@@ -47,6 +48,7 @@ impl InitialGeometry {
             "bullet" | "bullet_cluster" => Self::BulletCluster {
                 sigma: settings.bullet_clump_sigma,
                 peak_density: settings.bullet_clump_peak_density,
+                separation: settings.bullet_separation,
             },
             "custom" => Self::Custom,
             other => panic!("Unknown INITIAL_GEOMETRY: '{}'. Expected: uniform, blobs, perlin, custom, bullet_cluster", other),

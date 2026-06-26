@@ -90,6 +90,31 @@ pub struct AppSetting {
     /// Peak matter density at the center of a bullet-cluster clump. Must exceed
     /// collapse_density_threshold or the clump never rips and grows no halo.
     pub bullet_clump_peak_density: f64,
+    /// Half-offset (cells) of each Bullet Cluster clump from box center along WIDTH.
+    /// 0 = single clump at center (formation); >0 = a colliding pair at center +/- this.
+    pub bullet_separation: usize,
+    /// Master switch for the gas momentum channel. Off = validated overdamped
+    /// transport (apply_matter_transport); on = apply_gas_momentum (inertia + drag).
+    pub gas_momentum_enabled: bool,
+    /// Ram-pressure drag strength. 0 = collisionless gas (passes through like dark
+    /// matter -> no offset); >0 = gas shocks and lags at the collision interface.
+    pub gas_drag_coefficient: f64,
+    /// Density threshold above which ram-pressure drag engages. Set above a single
+    /// clump's peak so only the two-clump overlap pileup triggers the shock.
+    pub gas_shock_density: f64,
+    /// Isothermal sound speed for thermal gas pressure: P = c_s^2 * rho, giving an
+    /// acceleration a = -c_s^2 * grad(rho) / rho that pushes gas down its own density
+    /// gradient. This is the Jeans support the stability readout was always assuming.
+    /// Units: cells per unit-time (same as the in-memory gas velocity field). Bounded
+    /// by the sound Courant condition c_s * TIME_STEP_SIZE < CFL (0.25); past that the
+    /// gas freezes rather than blowing up -- a visible signal to lower this or the
+    /// timestep. Inert while gas_pressure_enabled is false.
+    pub gas_sound_speed: f64,
+    /// Master switch for thermal gas pressure. Off = byte-identical to the validated
+    /// rip-drain-bounded path (gravity + ram-pressure drag only); on = adds the
+    /// isothermal pressure term above. The clean A/B: pressure off reproduces today's
+    /// stability curve, pressure on adds Jeans support.
+    pub gas_pressure_enabled: bool,
     // --- Perlin params ---
     /// Number of noise octaves summed; more octaves add finer detail at diminishing amplitude.
     pub perlin_octaves: u32,
@@ -360,6 +385,12 @@ impl AppSetting {
             blob_sigma_max: get_f64("BLOB_SIGMA_MAX"),
             bullet_clump_sigma: get_f64("BULLET_CLUMP_SIGMA"),
             bullet_clump_peak_density: get_f64("BULLET_CLUMP_PEAK_DENSITY"),
+            bullet_separation: get_usize("BULLET_SEPARATION"),
+            gas_momentum_enabled: get_bool("GAS_MOMENTUM_ENABLED"),
+            gas_drag_coefficient: get_f64("GAS_DRAG_COEFFICIENT"),
+            gas_shock_density: get_f64("GAS_SHOCK_DENSITY"),
+            gas_sound_speed: get_f64("GAS_SOUND_SPEED"),
+            gas_pressure_enabled: get_bool("GAS_PRESSURE_ENABLED"),
             perlin_octaves: get_u32("PERLIN_OCTAVES"),
             perlin_frequency: get_f64("PERLIN_FREQUENCY"),
             perlin_amplitude: get_f64("PERLIN_AMPLITUDE"),
