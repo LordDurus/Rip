@@ -186,14 +186,31 @@ def coarse_scan(conn, run_id, ncol, window, timesteps, stride):
     return results
 
 
-def first_local_min(seps):
-    """Index of the first local minimum of |separation| in a sequence."""
+def first_closest_approach_index(seps, approach_frac):
+    """Index of the bottom of the FIRST real approach.
+
+    The clumps start near their maximum separation and sit there (with
+    sub-cell noise) until they actually collide. A plain local-minimum test
+    fires on that pre-collision noise, so instead we wait for separation to
+    drop below approach_frac * (initial separation) -- the onset of a genuine
+    approach -- then walk down to the valley bottom of that first dip.
+
+    Returns (index, used_fallback). used_fallback is True when no clear
+    approach was seen and we fell back to the global minimum.
+    """
     mags = [abs(s) for s in seps]
-    for i in range(1, len(mags) - 1):
-        if mags[i] <= mags[i - 1] and mags[i] < mags[i + 1]:
-            return i
-    # No interior local min: clumps still approaching (or scan too short).
-    return int(np.argmin(mags))
+    baseline = mags[0]
+    threshold = approach_frac * baseline
+
+    onset = next((i for i, m in enumerate(mags) if m < threshold), None)
+    if onset is None:
+        # No clear first-pass collision in range; best we can do is global min.
+        return int(np.argmin(mags)), True
+
+    j = onset
+    while j + 1 < len(mags) and mags[j + 1] < mags[j]:
+        j += 1
+    return j, False
 
 
 def refine(conn, run_id, ncol, window, timesteps, lo_t, hi_t):
@@ -216,7 +233,8 @@ def fmt(v, nd=2):
     return "n/a" if v is None else f"{v:.{nd}f}"
 
 
-def report(best, coarse, ncol, window, stride):
+def report(best, coarse, ncol, window, stride, baseline, used_fallback,
+           show_trajectory=True):
     print()
     print("=" * 64)
     print("FIRST CLOSEST APPROACH")
@@ -224,12 +242,20 @@ def report(best, coarse, ncol, window, stride):
     print(f"grid cols           : {ncol}  (split at col {ncol // 2})")
     print(f"centroid window      : +/-{window} cells around each clump peak")
     print(f"coarse stride        : {stride}")
+    print(f"initial separation   : {baseline:.2f} cells")
     print("-" * 64)
+    if used_fallback:
+        print("!! No clear first-pass approach found (separation never dropped")
+        print("   below the --approach-frac threshold). Reporting the GLOBAL")
+        print("   minimum instead -- lower --approach-frac if the clumps did")
+        print("   collide, or the run may not have produced a close pass.")
+        print("-" * 64)
     t = best["timestep"]
     print(f"timestep             : {t}")
     print(f"left gas centroid    : col {fmt(best['left_gas'])}")
     print(f"right gas centroid   : col {fmt(best['right_gas'])}")
-    print(f"clump separation     : {fmt(abs(best['separation']))} cells")
+    sep = abs(best["separation"])
+    print(f"clump separation     : {fmt(sep)} cells")
     print("-" * 64)
     print("GAS - DIMPLE OFFSET  (gas minus dark-matter proxy; lag = signature)")
     print(f"  left clump  offset : {fmt(best['left_offset'])} cells  "
@@ -238,17 +264,28 @@ def report(best, coarse, ncol, window, stride):
           f"(gas {_lag_word(best['right_offset'])} dimple)")
     print("=" * 64)
 
+    if sep < 2 * window:
+        print(f"!! separation ({sep:.1f}) < 2*window ({2 * window}): the two")
+        print("   centroid windows overlap here, so each centroid is")
+        print("   contaminated by the other clump and the offset is smeared.")
+        print(f"   Re-run with --window {max(1, int(sep // 2))} or read the")
+        print("   offset from the frames just BEFORE closest approach (plot/")
+        print("   trajectory below), where the clumps are still resolved.")
     crossed = best["separation"] < 0
     if crossed:
         print("!! centroids have CROSSED at this timestep (right is left of left).")
         print("   The midpoint split no longer tracks the original clumps here;")
         print("   trust the last pre-crossing sample for the clean offset.")
     print("NOTE: midpoint col-split is only valid through the first pass.")
-    print()
-    print("Coarse separation trajectory (timestep : |separation|):")
-    for m in coarse:
-        mark = "  <-- closest" if m["timestep"] == t else ""
-        print(f"  {m['timestep']:>6} : {abs(m['separation']):6.2f}{mark}")
+    if show_trajectory:
+        print()
+        print("Coarse separation trajectory (timestep : |separation|):")
+        for m in coarse:
+            mark = "  <-- closest" if m["timestep"] == t else ""
+            print(f"  {m['timestep']:>6} : {abs(m['separation']):6.2f}{mark}")
+    else:
+        print(f"(coarse trajectory of {len(coarse)} samples suppressed; "
+              "see offset_firstpass plot)")
 
 
 def _lag_word(offset):
@@ -321,8 +358,16 @@ def main():
                              "each clump peak (default: 8).")
     parser.add_argument("--max-timestep", type=int, default=None,
                         help="Only scan timesteps <= this (default: all).")
+    parser.add_argument("--approach-frac", type=float, default=0.6,
+                        help="A real approach is registered only once separation "
+                             "drops below this fraction of its initial value; "
+                             "rejects pre-collision plateau noise (default: 0.6).")
     parser.add_argument("--no-plot", action="store_true",
                         help="Skip writing the diagnostic PNG.")
+    parser.add_argument("--no-trajectory", action="store_true",
+                        help="Suppress the per-sample coarse trajectory table "
+                             "(keeps the summary + warnings). Use when redirecting "
+                             "into validation.txt to avoid hundreds of lines.")
     args = parser.parse_args()
 
     if not DB_PATH.exists():
@@ -339,7 +384,8 @@ def main():
         coarse = coarse_scan(conn, run_id, ncol, args.window,
                              timesteps, args.coarse_stride)
         seps = [m["separation"] for m in coarse]
-        i = first_local_min(seps)
+        baseline = abs(seps[0])
+        i, used_fallback = first_closest_approach_index(seps, args.approach_frac)
 
         lo_t = coarse[max(0, i - 1)]["timestep"]
         hi_t = coarse[min(len(coarse) - 1, i + 1)]["timestep"]
@@ -351,7 +397,8 @@ def main():
     finally:
         conn.close()
 
-    report(best, coarse, ncol, args.window, args.coarse_stride)
+    report(best, coarse, ncol, args.window, args.coarse_stride,
+           baseline, used_fallback, show_trajectory=not args.no_trajectory)
 
     if not args.no_plot:
         make_plot(coarse, best, run_id)

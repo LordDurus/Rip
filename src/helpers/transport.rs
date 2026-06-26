@@ -4,10 +4,10 @@ use rayon::prelude::*;
 
 /// Gravity-driven matter transport (two-pass, conservative).
 ///
-/// Pass 1 computes each non-black-hole cell's outflow to its six face-neighbours
+/// Pass 1 computes each non-black-hole cell's outflow to its six face-neighbors
 /// from a read-only view of the grid; pass 2 applies them as a gather, so it is
 /// race-free and conserves total matter exactly. Matter aimed at a black-hole
-/// neighbour stays with the source (black holes don't participate).
+/// neighbor stays with the source (black holes don't participate).
 ///
 /// This is the conservative replacement for the old in-place `accretion` term:
 /// matter moves *between* cells along the gravity direction rather than being
@@ -17,7 +17,7 @@ pub fn apply_matter_transport(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSett
     let (h_dim, w_dim, d_dim) = (settings.inf_grid_height, settings.inf_grid_width, settings.inf_grid_depth);
     const CFL: f64 = 0.25; // hard ceiling: never move more than this fraction of a cell per step
 
-    // read-only BH mask — pass 2 mutates the grid, so it can't read neighbours off it
+    // read-only BH mask — pass 2 mutates the grid, so it can't read neighbors off it
     let is_bh: Vec<Vec<Vec<bool>>> = grid.iter().map(|p| p.iter().map(|r| r.iter().map(|c| c.is_black_hole).collect()).collect()).collect();
 
     // outflow[h][w][d] = [-h, +h, -w, +w, -d, +d]
@@ -53,7 +53,7 @@ pub fn apply_matter_transport(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSett
         });
     }
 
-    // Pass 2: gather. new = old − (outflow to non-BH neighbours) + (neighbours' outflow toward me)
+    // Pass 2: gather. new = old − (outflow to non-BH neighbors) + (neighbors' outflow toward me)
     grid.par_iter_mut().enumerate().for_each(|(h, plane)| {
         plane.iter_mut().enumerate().for_each(|(w, rowc)| {
             rowc.iter_mut().enumerate().for_each(|(d, cell)| {
@@ -105,7 +105,7 @@ pub fn apply_matter_transport(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSett
 /// expansion dilution remains the only sink, so the validated boundedness is
 /// unchanged.
 ///
-/// NOTE: this is overdamped (no momentum) — it settles into wells rather than
+/// NOTE: this is over damped (no momentum) — it settles into wells rather than
 /// streaming through them, so it yields halos but NOT the Bullet-Cluster
 /// pass-through offset. That offset needs multi-streaming, i.e. the Tier 2
 /// particle/momentum dynamics. Setting dimple_transport_rate = 0 disables this
@@ -113,7 +113,7 @@ pub fn apply_matter_transport(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSett
 pub fn apply_dimple_transport(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSetting, step_duration: f64) {
     let _ = step_duration; // direction-normalized form doesn't need dt
     if settings.dimple_transport_rate <= 0.0 {
-        return; // movement disabled — pure static fossil (pre-Tier-1 behaviour)
+        return; // movement disabled — pure static fossil (pre-Tier-1 behavior)
     }
     let (h_dim, w_dim, d_dim) = (settings.inf_grid_height, settings.inf_grid_width, settings.inf_grid_depth);
     const CFL: f64 = 0.25; // never move more than this fraction of a cell's dimple per step
@@ -152,7 +152,7 @@ pub fn apply_dimple_transport(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSett
     }
 
     // Pass 2: gather. Collisionless — no black-hole masking, so every unit a cell
-    // sends is received by exactly one neighbour (total rip_dimple conserved).
+    // sends is received by exactly one neighbor (total rip_dimple conserved).
     grid.par_iter_mut().enumerate().for_each(|(h, plane)| {
         plane.iter_mut().enumerate().for_each(|(w, rowc)| {
             rowc.iter_mut().enumerate().for_each(|(d, cell)| {
@@ -175,21 +175,21 @@ pub fn apply_dimple_transport(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSett
 /// The baryonic counterpart to the collisionless dimple particles: gives the gas
 /// (matter_density) inertia and a ram-pressure shock so it can lag at a collision,
 /// while the dark-matter dimple sails through. Replaces apply_matter_transport when
-/// gas_momentum_enabled; the validated overdamped path is untouched when it is off.
+/// gas_momentum_enabled; the validated over damped path is untouched when it is off.
 ///
 /// Three stages, same conservative two-pass spirit as apply_matter_transport:
-///   1. Velocity prepass: v += g*dt per non-BH cell, so gravity-driven infall
+///   1. Velocity pre-pass: v += g*dt per non-BH cell, so gravity-driven infall
 ///      ACCUMULATES (inertia — the velocity persists across steps via the in-memory
 ///      gas_velocity grid). Then ram-pressure drag damps the velocity wherever the
 ///      gas density exceeds gas_shock_density (the two-clump pileup interface), so
 ///      the gas decelerates and lags. drag_coefficient = 0 -> no drag -> the gas is
 ///      effectively collisionless and passes through like the dimple (no offset);
 ///      that is the A/B null that proves drag is the mechanism.
-///   2. Outflow pass: each non-BH cell sends matter to its face-neighbours along the
+///   2. Outflow pass: each non-BH cell sends matter to its face-neighbors along the
 ///      velocity direction, fraction = (|v|*dt) capped at CFL, distributed by the L1
 ///      velocity components — exactly the apply_matter_transport scheme with velocity
 ///      substituted for the gravity direction. Read-only over grid + velocity.
-///   3. Gather pass: conservative gather; matter aimed at a black-hole neighbour
+///   3. Gather pass: conservative gather; matter aimed at a black-hole neighbor
 ///      stays with the source (gas does not enter black holes), so total matter is
 ///      conserved among non-BH cells.
 ///
@@ -207,7 +207,7 @@ pub fn apply_gas_momentum(grid: &mut Vec<Vec<Vec<Cell>>>, gas_velocity: &mut Vec
     let cs = settings.gas_sound_speed;
     let pressure_on = settings.gas_pressure_enabled && cs > 0.0;
 
-    // read-only BH mask — pass 3 mutates the grid, so it can't read neighbours off it
+    // read-only BH mask — pass 3 mutates the grid, so it can't read neighbors off it
     let is_bh: Vec<Vec<Vec<bool>>> = grid.iter().map(|p| p.iter().map(|r| r.iter().map(|c| c.is_black_hole).collect()).collect()).collect();
 
     // Pass 1: integrate velocity under gravity (inertia), add isothermal thermal
@@ -231,7 +231,7 @@ pub fn apply_gas_momentum(grid: &mut Vec<Vec<Vec<Cell>>>, gas_velocity: &mut Vec
                     // gradient -- the Jeans support that balances self-gravity. The
                     // gradient reads matter_density ONLY (the gas field, not the dimple),
                     // central differences with periodic wrap and dx = 1 cell. A black-hole
-                    // neighbour is clamped to the local density, making the rip boundary a
+                    // neighbor is clamped to the local density, making the rip boundary a
                     // no-flux face (no spurious push into or out of a BH). Gated on
                     // pressure_on so the disabled path stays byte-identical to before.
                     if pressure_on {
@@ -240,7 +240,7 @@ pub fn apply_gas_momentum(grid: &mut Vec<Vec<Vec<Cell>>>, gas_velocity: &mut Vec
                         let (hm, hp) = ((h + h_dim - 1) % h_dim, (h + 1) % h_dim);
                         let (wm, wp) = ((w + w_dim - 1) % w_dim, (w + 1) % w_dim);
                         let (dm, dp) = ((d + d_dim - 1) % d_dim, (d + 1) % d_dim);
-                        // BH neighbour -> local density => zero gradient across that face.
+                        // BH neighbor -> local density => zero gradient across that face.
                         let rho_at = |hh: usize, ww: usize, dd: usize| -> f64 {
                             let n = &cells[hh][ww][dd];
                             if n.is_black_hole { rho } else { n.matter_density }
@@ -310,7 +310,7 @@ pub fn apply_gas_momentum(grid: &mut Vec<Vec<Vec<Cell>>>, gas_velocity: &mut Vec
         });
     }
 
-    // Pass 3: gather. new = old − (outflow to non-BH neighbours) + (neighbours' inflow).
+    // Pass 3: gather. new = old − (outflow to non-BH neighbors) + (neighbors' inflow).
     grid.par_iter_mut().enumerate().for_each(|(h, plane)| {
         plane.iter_mut().enumerate().for_each(|(w, rowc)| {
             rowc.iter_mut().enumerate().for_each(|(d, cell)| {

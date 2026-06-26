@@ -39,7 +39,7 @@ py plot_galaxy.py --run-id %run_id% --timestep %timestep%
 py plot_offset_trajectory.py --run-id %run_id% >> %validation_file%
 py plot_stability.py --run-id %run_id% >> %validation_file%
 py dump_run_settings.py --run-id %run_id% >> %validation_file%
-py bullet_offset_firstpass.py --run-id %run_id% >> %validation_file%
+py bullet_offset_firstpass.py --run-id %run_id% --coarse-stride 5 --max-timestep %timestep% --window 4 --no-trajectory >> %validation_file%
 
 rem Debug
 py bullet_offset_diagnostic.py --run-id %run_id% --timestep 1 >> %validation_file%

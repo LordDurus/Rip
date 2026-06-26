@@ -2,7 +2,7 @@
 
 This is the ground-truth confirmation that the settings the simulation
 *actually loaded* match what you intended -- the long-standing
-config-propagation watchpoint. A key that exists in app_setting/source but
+config-propagation watch point. A key that exists in app_setting/source but
 never made it into run_setting for this run did not reach the run, full stop.
 
 Like bullet_offset_diagnostic.py and plot_stability.py, this prints to stdout
@@ -25,7 +25,7 @@ from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "rip_data.db"
 
-# Keys we currently insist on seeing in the snapshot. The active watchpoint is
+# Keys we currently insist on seeing in the snapshot. The active watch point is
 # the thermal-pressure pair: if these are absent, the pressure path silently
 # never ran no matter what the source says. Override with --expect.
 DEFAULT_EXPECT = ["GAS_PRESSURE_ENABLED", "GAS_SOUND_SPEED"]

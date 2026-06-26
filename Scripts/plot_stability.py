@@ -1,10 +1,13 @@
 """
 plot_stability.py  (read-only)
 
-The tuning readout for GAS_SOUND_SPEED: max matter_density and max rip_dimple
-(over NON-BH cells, so the 1e30 black-hole sentinel never distorts it) across the
-whole run. A flat line means pressure is holding the gas; an upturn pinpoints the
-Jeans-collapse blowup onset. Dial GAS_SOUND_SPEED until the line stays flat.
+The tuning readout for GAS_SOUND_SPEED: max matter_density, max rip_dimple, and
+total rip_dimple (all over NON-BH cells, so the 1e30 black-hole sentinel never
+distorts them) across the whole run. A flat max matter_density means pressure is
+holding the gas; an upturn pinpoints the Jeans-collapse blowup onset. total_dimple
+is the Tier 1 gate -- it must stay BOUNDED; a max that stays flat while the total
+keeps climbing means the dimple is spreading to more cells, not blowing up per
+cell, so watch the total directly. Dial GAS_SOUND_SPEED until the lines stay flat.
 
 PERFORMANCE: samples timesteps explicitly (WHERE timestep=?) so each query uses the
 (run_id, timestep) index and reads only the sampled timesteps. A "timestep % stride"
@@ -50,15 +53,16 @@ def main():
         steps.append(tmax)
     print(f"sampling {len(steps)} timesteps ({tmin}..{tmax}, stride {args.stride})")
 
-    t, mmatter, mdimple = [], [], []
+    t, mmatter, mdimple, tdimple = [], [], [], []
     for n, ts in enumerate(steps):
         row = conn.execute(
-            """SELECT MAX(matter_density), MAX(rip_dimple) FROM cell
+            """SELECT MAX(matter_density), MAX(rip_dimple), SUM(rip_dimple) FROM cell
                WHERE run_id=? AND timestep=? AND is_black_hole=0""",
             (args.run_id, ts)).fetchone()
         if row is None or row[0] is None:
             continue
         t.append(ts); mmatter.append(row[0]); mdimple.append(row[1] or 0.0)
+        tdimple.append(row[2] or 0.0)
         if (n + 1) % 20 == 0 or n + 1 == len(steps):
             print(f"  ...{n + 1}/{len(steps)} timesteps", flush=True)
     conn.close()
@@ -66,13 +70,14 @@ def main():
         raise SystemExit(f"No cell data for run_id={args.run_id}")
 
     t = np.array(t); mmatter = np.array(mmatter); mdimple = np.array(mdimple)
+    tdimple = np.array(tdimple)
     onset = None
     over = np.nonzero(mmatter > args.matter_ceiling)[0]
     if over.size:
         onset = int(t[over[0]])
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 7), sharex=True)
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 10), sharex=True)
     fig.suptitle(f"Field stability — Run {args.run_id}"
                  + (f"   BLOWUP onset ~ t={onset}" if onset is not None
                     else "   (bounded — no blowup)"), fontsize=12)
@@ -86,13 +91,27 @@ def main():
     ax2.plot(t, mdimple, color="tab:blue")
     if onset is not None:
         ax2.axvline(onset, ls=":", color="black", lw=0.8)
-    ax2.set_ylabel("max rip_dimple (non-BH)"); ax2.set_xlabel("timestep")
+    ax2.set_ylabel("max rip_dimple (non-BH)")
     ax2.grid(True, alpha=0.3)
+    ax3.plot(t, tdimple, color="tab:green")
+    if onset is not None:
+        ax3.axvline(onset, ls=":", color="black", lw=0.8)
+    ax3.set_ylabel("total_dimple (non-BH)  [Tier 1 gate]"); ax3.set_xlabel("timestep")
+    ax3.grid(True, alpha=0.3)
     plt.tight_layout()
     out = OUTPUT_DIR / f"stability_run{args.run_id}.png"
     plt.savefig(out, dpi=150); plt.close()
     print(f"max matter_density: {mmatter.min():.3g} .. {mmatter.max():.3g}")
     print(f"max rip_dimple:     {mdimple.min():.3g} .. {mdimple.max():.3g}")
+    print(f"total_dimple:       {tdimple.min():.3g} .. {tdimple.max():.3g}")
+    tail = max(2, len(tdimple) // 4)
+    ref = tdimple[-tail]
+    growth = (tdimple[-1] - ref) / ref if ref else 0.0
+    if growth > 0.01:
+        print(f"total_dimple STILL RISING over final quarter (+{growth * 100:.1f}%)"
+              " -- Tier 1 gate wants this bounded; confirm it saturates.")
+    else:
+        print(f"total_dimple leveled off over final quarter ({growth * 100:+.1f}%).")
     print("BLOWUP onset ~ t=" + str(onset) if onset is not None
           else "Field stayed bounded (no blowup).")
     print(f"Saved: {out}")

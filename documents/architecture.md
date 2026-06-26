@@ -7,7 +7,7 @@
 
 ```mermaid
 graph TD
-    A([Start Run]) --> B[Initialise Grid\nbase geometry: Uniform / GaussianBlobs / Perlin / Custom]
+    A([Start Run]) --> B[Initialize Grid\nbase geometry: Uniform / GaussianBlobs / Perlin / Custom]
     B --> C[place_galaxies\nseed N galaxy regions at random positions]
     C --> D[apply_galaxy_overdensity\nboost matter density inside galaxy regions]
     D --> E[seed_initial_curvature\nper-cell curvature + galaxy curvature boost]

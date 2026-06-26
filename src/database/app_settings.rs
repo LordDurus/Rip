@@ -93,7 +93,7 @@ pub struct AppSetting {
     /// Half-offset (cells) of each Bullet Cluster clump from box center along WIDTH.
     /// 0 = single clump at center (formation); >0 = a colliding pair at center +/- this.
     pub bullet_separation: usize,
-    /// Master switch for the gas momentum channel. Off = validated overdamped
+    /// Master switch for the gas momentum channel. Off = validated over damped
     /// transport (apply_matter_transport); on = apply_gas_momentum (inertia + drag).
     pub gas_momentum_enabled: bool,
     /// Ram-pressure drag strength. 0 = collisionless gas (passes through like dark
