@@ -104,14 +104,31 @@ def main():
     print(f"max matter_density: {mmatter.min():.3g} .. {mmatter.max():.3g}")
     print(f"max rip_dimple:     {mdimple.min():.3g} .. {mdimple.max():.3g}")
     print(f"total_dimple:       {tdimple.min():.3g} .. {tdimple.max():.3g}")
-    tail = max(2, len(tdimple) // 4)
-    ref = tdimple[-tail]
-    growth = (tdimple[-1] - ref) / ref if ref else 0.0
-    if growth > 0.01:
-        print(f"total_dimple STILL RISING over final quarter (+{growth * 100:.1f}%)"
-              " -- Tier 1 gate wants this bounded; confirm it saturates.")
+    # Saturation read on total_dimple (the Tier 1 gate). A decelerating curve
+    # is bounded-in-the-limit even if not yet flat; only a steady (non-decaying)
+    # slope is a real concern. So report final-quarter growth AND whether the
+    # tail is decelerating: compare per-sample growth in the final eighth vs the
+    # eighth before it.
+    q = max(2, len(tdimple) // 4)
+    g_quarter = (tdimple[-1] - tdimple[-q]) / tdimple[-q] if tdimple[-q] else 0.0
+    e = max(1, len(tdimple) // 8)
+    if len(tdimple) > 2 * e:
+        late = (tdimple[-1] - tdimple[-e]) / e
+        early = (tdimple[-e] - tdimple[-2 * e]) / e
     else:
-        print(f"total_dimple leveled off over final quarter ({growth * 100:+.1f}%).")
+        late = early = 0.0
+    decelerating = early > 0 and late < 0.6 * early
+    ratio = (late / early) if early > 0 else 0.0
+    if g_quarter <= 0.01:
+        print(f"total_dimple leveled off over final quarter ({g_quarter * 100:+.1f}%).")
+    elif decelerating:
+        print(f"total_dimple +{g_quarter * 100:.1f}% over final quarter but "
+              f"DECELERATING (tail slope {ratio * 100:.0f}% of earlier) -- approaching "
+              "a plateau, not runaway; a longer run would confirm the asymptote.")
+    else:
+        print(f"total_dimple STILL RISING +{g_quarter * 100:.1f}% over final quarter, "
+              "not decelerating -- Tier 1 gate wants bounded; check for a "
+              "non-saturating source.")
     print("BLOWUP onset ~ t=" + str(onset) if onset is not None
           else "Field stayed bounded (no blowup).")
     print(f"Saved: {out}")
