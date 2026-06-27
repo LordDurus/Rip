@@ -419,3 +419,93 @@ the goal, *before* increasing the grid (so the bigger grid lands on the compact 
 
 **Status.** Engineering idea, surfaced when the 64³×5000 DB hit 134 GB. Real project, not a quick
 toggle; parked until grid growth needs it.
+
+---
+
+## Black-hole registry — nested universes, with current state + per-timestep history
+
+**The idea.** Give every black hole a durable, globally-unique identity: insert a `black_hole`
+row at formation and use the key SQLite assigns (`INTEGER PRIMARY KEY`, i.e. the rowid) as its
+id. `run.blackhole_id` is then a single FK into that table, naming the exact parent black hole a
+run is the interior of. This is the data-model form of the *Universe-inside-a-black-hole*
+hypothesis (see that entry): a run is a universe; the column says which black hole, in which
+parent universe, it lives inside. Root universe: `blackhole_id = 0`. It also fixes today's
+`cell.black_hole_id`, a per-run `Mutex(1)` counter that means nothing across runs ("just a number
+that goes up") — now it resolves to a real registry row.
+
+**Two tables, one job each.**
+- `black_hole` — **identity + current state**, overwritten in place. `black_hole_id INTEGER
+  PRIMARY KEY`, `run_id`, `cell_position_id`, `formation_timestep`, the seed-properties
+  (`mass`, `curvature`, `connection_strength`), and `is_active`. One row per BH for its whole
+  life; updated each step to "what is this BH right now."
+- `black_hole_history` — **per-timestep state while active**, append-only. `black_hole_id`,
+  `timestep`, `mass`, `curvature`, `connection_strength`, `matter_density`, `is_active`. One
+  row per BH per active step. Flips fall out of the data — a reversal is where `is_active` goes
+  true→false between consecutive rows, a re-formation false→true — so there is no separate flip
+  log or formed/reverted tag. Grain chosen as per-timestep (not per-flip) because it buys full
+  mass/curvature trajectories for the SMBH mass-function work, and it scales with
+  BHs x lifetime (millions of rows), a rounding error against `cell`'s billions.
+- `is_active` on `black_hole` is a **denormalized cache** of the latest history state — there so
+  "is this BH live?" is a flag read, not a `MAX(timestep)`-per-BH lookup mid-run. Write
+  discipline: the flag and the history row are written in the same operation, or they drift.
+
+**The two id columns + the 0-sentinel.**
+- `run.blackhole_id` `u64` NOT NULL DEFAULT 0 -> `black_hole.black_hole_id`; **0 = root**.
+  Rowids start at 1, so 0 is never assigned and is a safe sentinel — keeps NOT-NULL discipline,
+  no nullable exception. Precludes an enforced FK (0 -> nonexistent row), but references here
+  are conventional (`PRAGMA foreign_keys` off), so nothing is lost.
+- `cell.black_hole_id` `u64` NOT NULL DEFAULT 0 -> `black_hole.black_hole_id`; **drop the
+  `Option<u64>`**. Five Rust sites (`cell.rs` field + default, `black_hole.rs` set + revert,
+  `galaxy.rs` absorption); the write in `sqlite_provider.rs` may need `as i64` (rusqlite
+  `ToSql`). No SQL/plot breakage — nothing keys on NULL-ness. Existing `rip_data.db` keeps the
+  nullable column but stays valid (code writes 0, never NULL); only fresh DBs from the template
+  carry the NOT NULL constraint.
+
+**Write path / parallelism.** `set_as_black_hole` runs inside the rayon cell passes, so a
+synchronous per-collapse insert there is a contention + correctness hazard. Do all registry
+writes at the serial point between passes, batched: formation = insert `black_hole` rows,
+`last_insert_rowid()` -> stamp cells; each step = overwrite each active BH's `black_hole` row +
+append its `black_hole_history` row.
+
+**OPEN QUESTION — identity vs liveness on `cell.black_hole_id` (settle before the revert edit).**
+Consolidating revealed a conflict between two decisions made several turns apart:
+- (A) migrate `is_black_hole` readers -> `black_hole_id != 0`, then eventually drop the boolean;
+- (B) reuse a BH's row on re-collapse (don't mint a new row per episode).
+These disagree on what `black_hole_id` means when a cell reverts:
+- If the cell **keeps** its id through reversal (so re-collapse re-finds its row off the cell),
+  then `black_hole_id != 0` includes dormant cells -> it is *not* equivalent to `is_black_hole`,
+  so the boolean **cannot** be dropped and plots must keep filtering on `is_black_hole`. (A) dies.
+- If the cell **clears** its id on reversal (0 = not currently live), then
+  `is_black_hole <=> black_hole_id != 0` holds and (A) survives — but reuse-the-row can no longer
+  read the old id off the cell, so it must find the dormant row another way: look it up by
+  `(run_id, cell_position_id)`, e.g. an in-memory `cell_position -> black_hole_id` map kept at the
+  serial point.
+- Third option: a **new** `black_hole` row per collapse episode (no reuse) — simplest writes, but
+  one physical location accrues many ids and "this BH's history" gets fuzzy.
+Recommendation: **clear-on-revert + reuse via `(run_id, cell_position_id)` lookup.** It keeps both
+goals — `is_black_hole <=> black_hole_id != 0` (so the strangler-drop plan survives) *and* one
+stable row per physical BH — for the price of a cheap position->id lookup on re-collapse. This also
+keeps `revert` zeroing `black_hole_id` (consistent with the cell-sentinel edit already specced).
+Note: the keep-id option would instead require `revert` to *not* zero `black_hole_id`, contradicting
+that edit — which is exactly why this has to be settled first.
+
+**Reversal physics (independent of bookkeeping).** `revert_black_hole` already dumps the residual
+`matter_density` back into `total_matter` — the contraction kick. Conservation hazard for the
+nested case: if the BH seeded a child universe, mass that left into the child must **not** return on
+revert, or it exists in both the child and the re-expanded parent (double count). Check at each
+true->false transition.
+
+**Child seeding (the actual payoff).** Spawn a child run whose matter budget / initial geometry
+derives from the parent BH's `mass` and `curvature` — the two-sided SMBH accounting, parent inflow
+as the child-side boundary source. The columns are the easy part; this is the design effort.
+
+**Gate condition.** The schema (two tables, both id columns, `is_active`, history) is cheap and can
+land after the gas-pressure/drag issue — but the identity-vs-liveness question above must be settled
+first, since it sets the `revert` behavior. The *payoff* (spawning a child, re-entering "the same"
+BH) is gated on **reproducible runs**: you can't re-enter a BH in a run you can't regenerate, and the
+physics RNG is currently `thread_rng()` (grid/particle/in-loop draws), not seeded from the recorded
+`seed`. Build order: determinism fix -> registry tables + columns -> child-seeding.
+
+**Status.** Design consolidated across the `NUM_RUNS`-removal discussion; `cell.black_hole_id`
+already exists as a placeholder counter. Parked: schema shovel-ready after gas once the
+identity/liveness question is resolved; spawn mechanic waits on determinism + Tier 2.

@@ -48,11 +48,17 @@ py bullet_offset_diagnostic.py --run-id %run_id% --timestep 150 >> %validation_f
 py bullet_offset_diagnostic.py --run-id %run_id% --timestep 199 >> %validation_file%
 
 
-if %timestep% GTR 199 (
+if %timestep% GTR 249 (
 	py bullet_offset_diagnostic.py --run-id %run_id% --timestep 250 >> %validation_file%
-	py bullet_offset_diagnostic.py --run-id %run_id% --timestep 1500 >> %validation_file%
-	py bullet_offset_diagnostic.py --run-id %run_id% --timestep 3000 >> %validation_file%
-	py bullet_offset_diagnostic.py --run-id %run_id% --timestep 4999 >> %validation_file%
+	if %timestep% GTR 1499 (
+		py bullet_offset_diagnostic.py --run-id %run_id% --timestep 1500 >> %validation_file%
+	}
+	if %timestep% GTR 2999 (
+		py bullet_offset_diagnostic.py --run-id %run_id% --timestep 3000 >> %validation_file%
+	}
+	if %timestep% GTR 4998 (
+		py bullet_offset_diagnostic.py --run-id %run_id% --timestep 4999 >> %validation_file%
+	}
 )
 
 rem Run this last to get all the PNG files created.
