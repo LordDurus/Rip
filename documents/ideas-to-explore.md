@@ -482,12 +482,8 @@ These disagree on what `black_hole_id` means when a cell reverts:
   serial point.
 - Third option: a **new** `black_hole` row per collapse episode (no reuse) — simplest writes, but
   one physical location accrues many ids and "this BH's history" gets fuzzy.
-Recommendation: **clear-on-revert + reuse via `(run_id, cell_position_id)` lookup.** It keeps both
-goals — `is_black_hole <=> black_hole_id != 0` (so the strangler-drop plan survives) *and* one
-stable row per physical BH — for the price of a cheap position->id lookup on re-collapse. This also
-keeps `revert` zeroing `black_hole_id` (consistent with the cell-sentinel edit already specced).
-Note: the keep-id option would instead require `revert` to *not* zero `black_hole_id`, contradicting
-that edit — which is exactly why this has to be settled first.
+- This going to use a `black_hole` table with an is_acitve field and `black_hole_history` will leave 
+  all the links in place and change the value of IsActive as needed.
 
 **Reversal physics (independent of bookkeeping).** `revert_black_hole` already dumps the residual
 `matter_density` back into `total_matter` — the contraction kick. Conservation hazard for the
