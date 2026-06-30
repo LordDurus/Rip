@@ -1,4 +1,5 @@
 import argparse
+import os
 import sqlite3
 import pandas as pd
 import numpy as np
@@ -53,6 +54,7 @@ def load_cells(conn, run_id, timestep):
 
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     parser = argparse.ArgumentParser(description="3D visualization of simulation structure.")
     parser.add_argument("--run-id", type=int, default=None)
     parser.add_argument("--timestep", type=int, default=None,

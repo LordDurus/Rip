@@ -1,4 +1,5 @@
 import argparse
+import os
 import sqlite3
 import pandas as pd
 import numpy as np
@@ -100,15 +101,13 @@ def project_2d(density):
 
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     parser = argparse.ArgumentParser(description="Filament and void structure analysis.")
     parser.add_argument("--run-id", type=int, default=None)
-    parser.add_argument("--timestep", type=int, default=None,
-                        help="Timestep to analyze (default: matter density peak)")
+    parser.add_argument("--timestep", type=int, default=None, help="Timestep to analyze (default: matter density peak)")
     parser.add_argument("--grid-size", type=int, default=64)
-    parser.add_argument("--filament-percentile", type=float, default=70,
-                        help="Density percentile above which cells are filaments (default: 70)")
-    parser.add_argument("--void-percentile", type=float, default=30,
-                        help="Density percentile below which cells are voids (default: 30)")
+    parser.add_argument("--filament-percentile", type=float, default=70, help="Density percentile above which cells are filaments (default: 70)")
+    parser.add_argument("--void-percentile", type=float, default=30, help="Density percentile below which cells are voids (default: 30)")
     args = parser.parse_args()
 
     if not DB_PATH.exists():

@@ -17,6 +17,7 @@ large DB. Larger --stride = fewer queries = faster.
 Usage: py plot_stability.py [--run-id 1] [--stride 25] [--matter-ceiling 1e4] [--db PATH]
 """
 import argparse
+import os
 import sqlite3
 from pathlib import Path
 import numpy as np
@@ -35,6 +36,7 @@ DB_PATH = REPO / "data" / "rip_data.db"
 OUTPUT_DIR = REPO / "output"
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")            
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-id", type=int, default=1)
     ap.add_argument("--stride", type=int, default=25,

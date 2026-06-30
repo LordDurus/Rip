@@ -1,4 +1,5 @@
 import argparse
+import os
 import sqlite3
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -39,8 +40,8 @@ def load_summary(conn, run_id):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Plot total matter (non-BH) vs scale factor over time.")
+    print(f"Running: {os.path.basename(__file__)}")
+    parser = argparse.ArgumentParser(description="Plot total matter (non-BH) vs scale factor over time.")
     parser.add_argument("--run-id", type=int, default=None,
                         help="Run ID to plot (default: most recent completed run)")
     args = parser.parse_args()

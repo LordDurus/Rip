@@ -29,6 +29,7 @@ Usage: py plot_offset_trajectory.py [--run-id 1] [--baseline RUN_ID] [--stride 2
          [--axis col|row] [--window 6] [--centers A B] [--matter-ceiling 1e4] [--db PATH]
 """
 import argparse
+import os
 import sqlite3
 from pathlib import Path
 import numpy as np
@@ -158,6 +159,7 @@ def compute_run(conn, run_id, lo_mask, hi_mask, ax, window, n_ax, stride, matter
 
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-id", type=int, default=1)
     ap.add_argument("--baseline", type=int, default=None,

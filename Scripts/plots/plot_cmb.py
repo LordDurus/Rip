@@ -1,4 +1,5 @@
 import argparse
+import os
 import sqlite3
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -113,6 +114,7 @@ def save_png(path):
 
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     parser = argparse.ArgumentParser(description="Plot CMB-style projections for a simulation run.")
     parser.add_argument("--run-id", type=int, default=None, help="Run ID to plot (default: most recent completed run)")
     args = parser.parse_args()

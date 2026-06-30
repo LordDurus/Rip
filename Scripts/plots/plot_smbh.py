@@ -1,4 +1,5 @@
 import argparse
+import os
 import sqlite3
 import pandas as pd
 import numpy as np
@@ -51,12 +52,10 @@ def load_smbh(conn, run_id, timestep):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="SMBH mass distribution and connection-strength relationship.")
-    parser.add_argument("--run-id", type=int, default=None,
-                        help="Run ID to plot (default: most recent completed run)")
-    parser.add_argument("--timestep", type=int, default=None,
-                        help="Timestep to plot (default: final timestep of the run)")
+    print(f"Running: {os.path.basename(__file__)}")
+    parser = argparse.ArgumentParser(description="SMBH mass distribution and connection-strength relationship.")
+    parser.add_argument("--run-id", type=int, default=None, help="Run ID to plot (default: most recent completed run)")
+    parser.add_argument("--timestep", type=int, default=None, help="Timestep to plot (default: final timestep of the run)")
     args = parser.parse_args()
 
     if not DB_PATH.exists():

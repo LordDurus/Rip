@@ -93,20 +93,13 @@ def firstpass_json(run_id, timesteps, stride, window):
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--key", default="GAS_DRAG_COEFFICIENT",
-                    help="app_setting key to sweep (default: GAS_DRAG_COEFFICIENT).")
-    ap.add_argument("--values", nargs="+", required=True,
-                    help="values to sweep, passed verbatim into app_setting.")
-    ap.add_argument("--timesteps", type=int, default=1500,
-                    help="NUM_TIMESTEPS for each sweep run (default: 1500).")
-    ap.add_argument("--offset-stride", type=int, default=5,
-                    help="coarse stride for the firstpass diagnostic (default: 5).")
-    ap.add_argument("--offset-window", type=int, default=3,
-                    help="centroid window for the firstpass diagnostic (default: 3).")
-    ap.add_argument("--pin", action="append", default=[], metavar="KEY=VALUE",
-                    help="also pin another setting for every run (repeatable).")
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--key", default="GAS_DRAG_COEFFICIENT", help="app_setting key to sweep (default: GAS_DRAG_COEFFICIENT).")
+    ap.add_argument("--values", nargs="+", required=True, help="values to sweep, passed verbatim into app_setting.")
+    ap.add_argument("--timesteps", type=int, default=1500, help="NUM_TIMESTEPS for each sweep run (default: 1500).")
+    ap.add_argument("--offset-stride", type=int, default=5, help="coarse stride for the firstpass diagnostic (default: 5).")
+    ap.add_argument("--offset-window", type=int, default=3, help="centroid window for the firstpass diagnostic (default: 3).")
+    ap.add_argument("--pin", action="append", default=[], metavar="KEY=VALUE", help="also pin another setting for every run (repeatable).")
     ap.add_argument("--sim-cmd", default="cargo run --release",
                     help="command that runs the sim (default: 'cargo run --release'; "
                          "point at target\\release\\rip.exe to skip the build check).")

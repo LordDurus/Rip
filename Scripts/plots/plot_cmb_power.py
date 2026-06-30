@@ -1,4 +1,5 @@
 import argparse
+import os
 import sqlite3
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -124,6 +125,7 @@ def radial_power_spectrum(field2d):
 
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     parser = argparse.ArgumentParser(description="CMB-analog power spectrum from the field right after inflation.")
     parser.add_argument("--run-id", type=int, default=None, help="Run ID (default: most recent completed run)")
     parser.add_argument("--field", type=str, default=DEFAULT_FIELD,

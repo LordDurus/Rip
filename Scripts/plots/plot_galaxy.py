@@ -1,4 +1,5 @@
 import argparse
+import os
 import sqlite3
 import pandas as pd
 import numpy as np
@@ -122,6 +123,7 @@ def draw_panel(ax, df, timestep, vmin, vmax, smax):
 
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     parser = argparse.ArgumentParser(
         description="Galaxy centroid map (2D projection), early vs late timestep. "
                     "Marker size = total_mass, color = SMBH count.")

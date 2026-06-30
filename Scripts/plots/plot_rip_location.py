@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -36,6 +37,7 @@ def plot_run(run_id, df):
         plt.plot(time, fit_y, linestyle='--', alpha=0.7)
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     if not DB_PATH.exists():
         print(f"Database not found: {DB_PATH}")
         return

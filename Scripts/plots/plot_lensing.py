@@ -18,6 +18,7 @@ Two scalars to track across the Tier 0 -> Tier 1 transition:
 Usage: py plot_lensing.py --run-id 1 [--timestep N]   (default: last timestep)
 """
 import argparse
+import os
 import sqlite3
 from pathlib import Path
 
@@ -98,6 +99,7 @@ def lognorm(grid):
 
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-id", type=int, default=1)
     ap.add_argument("--timestep", type=int, default=None)
