@@ -173,16 +173,20 @@ pub fn apply_dimple_transport(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSett
 /// Gas momentum transport (Bullet Cluster, collisional).
 ///
 /// The baryonic counterpart to the collisionless dimple particles: gives the gas
-/// (matter_density) inertia and a ram-pressure shock so it can lag at a collision,
+/// (matter_density) inertia and ram-pressure drag so it can lag at a collision,
 /// while the dark-matter dimple sails through. Replaces apply_matter_transport when
 /// gas_momentum_enabled; the validated over damped path is untouched when it is off.
 ///
 /// Three stages, same conservative two-pass spirit as apply_matter_transport:
 ///   1. Velocity pre-pass: v += g*dt per non-BH cell, so gravity-driven infall
 ///      ACCUMULATES (inertia — the velocity persists across steps via the in-memory
-///      gas_velocity grid). Then ram-pressure drag damps the velocity wherever the
-///      gas density exceeds gas_shock_density (the two-clump pileup interface), so
-///      the gas decelerates and lags. drag_coefficient = 0 -> no drag -> the gas is
+///      gas_velocity grid). Then linear ram-pressure drag damps the velocity of ALL
+///      moving gas (v *= 1 - drag*dt, a = -drag*v), so the gas decelerates and lags
+///      the collisionless dimple. (Was gated on gas density > gas_shock_density to
+///      localize it to a pileup interface, but with pressure on the gas decompresses
+///      at collision and never reaches that threshold, so the gate never fired; the
+///      lag comes from the velocity drag itself, no pileup needed.)
+///      drag_coefficient = 0 -> no drag -> the gas is
 ///      effectively collisionless and passes through like the dimple (no offset);
 ///      that is the A/B null that proves drag is the mechanism.
 ///   2. Outflow pass: each non-BH cell sends matter to its face-neighbors along the
@@ -194,7 +198,7 @@ pub fn apply_dimple_transport(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSett
 ///      conserved among non-BH cells.
 ///
 /// NOTE: the velocity field is Eulerian (per-cell, gravity-integrated with inertia),
-/// not full Lagrangian momentum advection — the gas gains inertia and a shock lag,
+/// not full Lagrangian momentum advection — the gas gains inertia and a drag lag,
 /// which is what the Bullet Cluster offset needs, but velocity is not itself carried
 /// with the advected parcel. If that approximation proves too lossy, momentum
 /// advection is the phase-2 refinement.
@@ -203,7 +207,6 @@ pub fn apply_gas_momentum(grid: &mut Vec<Vec<Vec<Cell>>>, gas_velocity: &mut Vec
     let (h_dim, w_dim, d_dim) = (settings.inf_grid_height, settings.inf_grid_width, settings.inf_grid_depth);
     const CFL: f64 = 0.25; // never move more than this fraction of a cell per step
     let drag = settings.gas_drag_coefficient;
-    let shock = settings.gas_shock_density;
     let cs = settings.gas_sound_speed;
     let pressure_on = settings.gas_pressure_enabled && cs > 0.0;
 
@@ -211,9 +214,14 @@ pub fn apply_gas_momentum(grid: &mut Vec<Vec<Vec<Cell>>>, gas_velocity: &mut Vec
     let is_bh: Vec<Vec<Vec<bool>>> = grid.iter().map(|p| p.iter().map(|r| r.iter().map(|c| c.is_black_hole).collect()).collect()).collect();
 
     // Pass 1: integrate velocity under gravity (inertia), add isothermal thermal
-    // pressure (Jeans support) with a sound-Courant clamp, then ram-pressure drag.
+    // pressure (Jeans support) with a sound-Courant clamp, then convergence-gated drag.
     {
         let cells = &*grid;
+        // Velocity snapshot for the convergence (divergence) gate below. Pass 1
+        // mutates gas_velocity in place, so the div stencil must read a consistent
+        // read-only copy (last step's field), not half-updated neighbors. ~12 MB at
+        // 80^3; revisit if it ever shows up in profiling.
+        let vel_prev = gas_velocity.clone();
         gas_velocity.par_iter_mut().enumerate().for_each(|(h, plane)| {
             plane.iter_mut().enumerate().for_each(|(w, rowv)| {
                 rowv.iter_mut().enumerate().for_each(|(d, v)| {
@@ -270,11 +278,38 @@ pub fn apply_gas_momentum(grid: &mut Vec<Vec<Vec<Cell>>>, gas_velocity: &mut Vec
                         }
                     }
 
-                    if drag > 0.0 && c.matter_density > shock {
-                        let damp = (1.0 - drag * dt).max(0.0);
-                        v[0] *= damp;
-                        v[1] *= damp;
-                        v[2] *= damp;
+                    // Ram-pressure drag, gated on CONVERGING flow. div(v) < 0 means
+                    // gas streams are meeting head-on (the collision interface: going
+                    // across it the w-velocity flips + -> -, so d(v_w)/dw < 0); during
+                    // ballistic infall each clump moves as a coherent blob with div ~ 0,
+                    // so drag is ~0 and the approach stays ballistic (min_sep ~ the null).
+                    // The damp scales with convergence strength,
+                    //     damp = 1 - drag * max(0, -div) * dt,
+                    // so braking concentrates where/when streams actually collide. This
+                    // replaces both the dead gas_shock_density gate (pressure prevents the
+                    // pileup it needed, see physics-problems.md) and the ungated form
+                    // (which damped infall as hard as collision, leaving no window where
+                    // the clumps collide AND the gas lags). div is read from vel_prev (a
+                    // pre-pass snapshot) so the stencil is consistent and order-independent;
+                    // a BH neighbor is clamped to the local velocity -> no spurious
+                    // convergence across a rip face, same no-flux trick as the pressure
+                    // gradient. NOTE: conv*dt is small, so the coefficient bracket is far
+                    // larger than the ungated ~0.01-0.2 -- recalibrate from scratch with a
+                    // wide log sweep (e.g. 1 5 20 100), measuring min_sep against the null.
+                    if drag > 0.0 {
+                        let v_self = vel_prev[h][w][d];
+                        let comp = |hh: usize, ww: usize, dd: usize, k: usize| -> f64 { if cells[hh][ww][dd].is_black_hole { v_self[k] } else { vel_prev[hh][ww][dd][k] } };
+                        let (hm, hp) = ((h + h_dim - 1) % h_dim, (h + 1) % h_dim);
+                        let (wm, wp) = ((w + w_dim - 1) % w_dim, (w + 1) % w_dim);
+                        let (dm, dp) = ((d + d_dim - 1) % d_dim, (d + 1) % d_dim);
+                        let div = 0.5 * (comp(hp, w, d, 0) - comp(hm, w, d, 0)) + 0.5 * (comp(h, wp, d, 1) - comp(h, wm, d, 1)) + 0.5 * (comp(h, w, dp, 2) - comp(h, w, dm, 2));
+                        let conv = (-div).max(0.0); // only converging flow brakes
+                        if conv > 0.0 {
+                            let damp = (1.0 - drag * conv * dt).max(0.0);
+                            v[0] *= damp;
+                            v[1] *= damp;
+                            v[2] *= damp;
+                        }
                     }
                 });
             });

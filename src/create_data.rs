@@ -51,10 +51,21 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
     let geometry = InitialGeometry::from_settings(app_settings);
     let decay_mechanism = RipDecayMechanism::from_settings(app_settings);
 
-    let seed: u64 = rand::thread_rng().r#gen();
+    // Master RNG seed. SEED = 0 -> draw one and record it (so even an unpinned
+    // run is reproducible after the fact via run.seed); nonzero -> use exactly
+    // this, so a sweep can hold the seed fixed and vary only the parameter under
+    // test. Threaded into grid/particle/curvature init and the per-cell SMBH draw.
+    let seed: u64 = if app_settings.seed != 0 {
+        app_settings.seed
+    } else {
+        // Draw a fresh seed, kept in usize/i64 range so the value recorded in
+        // run.seed round-trips back through the SEED setting for reproduction.
+        let drawn: u64 = rand::thread_rng().r#gen();
+        drawn >> 1
+    };
     let run = db.start_run(seed, Some("baseline")).expect("Failed to start run");
 
-    println!("{} {}{} {}{}{}", "Starting run".white(), (run.run_id), " of ".white(), "(run_id=".white(), run.run_id, ")".white());
+    println!("{}{}{}", "Starting run (run_id=".white(), run.run_id, ")".white());
 
     let mut grid = vec![vec![vec![Cell::new(); app_settings.inf_grid_depth]; app_settings.inf_grid_width]; app_settings.inf_grid_height];
 
@@ -63,7 +74,7 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
     // Inert unless gas_momentum_enabled; its footprint is the motion it produces.
     let mut gas_velocity: Vec<Vec<Vec<[f64; 3]>>> = vec![vec![vec![[0.0f64; 3]; app_settings.inf_grid_depth]; app_settings.inf_grid_width]; app_settings.inf_grid_height];
 
-    let mut galaxies = seed_initial_curvature(&mut grid, &app_settings, db);
+    let mut galaxies = seed_initial_curvature(&mut grid, &app_settings, db, seed);
     Galaxy::assign_run_id(&mut galaxies, run.run_id);
     // Galaxies are found dynamically each post-inflation timestep, not seeded.
     // `galaxies` starts empty (seed_initial_curvature returns an empty Vec).
@@ -78,9 +89,9 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
     let num_particles = app_settings.structure_num_particles;
     let mut positions = vec![(0.0, 0.0, 0.0); num_particles];
     let mut velocities = vec![(0.0, 0.0, 0.0); num_particles];
-    initialize_particles(&mut positions, &mut velocities);
+    initialize_particles(&mut positions, &mut velocities, seed);
 
-    if let Err(err) = populate_grid(&geometry, &mut grid, db) {
+    if let Err(err) = populate_grid(&geometry, &mut grid, db, seed) {
         let message = format!("failed to populate initial geometry: {err}");
         _ = db.log_message(run.run_id, MODULE, LogLevel::Error, &message);
         _ = db.fail_run(run.run_id, message);
@@ -92,7 +103,7 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
 
     // Compute initial total matter as baseline for expansion calculation
     // Start "maximally unstable" so star formation is blocked until the first
-    // real matter_delta proves the universe has stabilised (inflation ending).
+    // real matter_delta proves the universe has stabilized (inflation ending).
     // Using 0.0 here would wrongly read as "stable" on timestep 0.
     let mut previous_matter_delta: f64 = f64::INFINITY;
     let mut previous_total_matter: f64 = grid
@@ -249,13 +260,12 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                         // Probability decays exponentially with timestep so early
                         // formation is favored (the JWST overmassive-early-BH regime).
                         let smbh_probability = app_settings.smbh_formation_probability * f64::exp(-(timestep as f64) / app_settings.smbh_early_bias);
-                        let mut rng = rand::thread_rng();
                         // No galaxy gating: SMBHs are exogenous — seeded by a
                         // feeding black hole in the parent universe, which we do
                         // not model and cannot time. They may form anywhere, any
                         // time (including during/before inflation). Galaxies later
                         // condense around the wells these seeds leave behind.
-                        if cell.curvature > app_settings.smbh_curvature_threshold && rng.gen_range(0.0..1.0) < smbh_probability {
+                        if cell.curvature > app_settings.smbh_curvature_threshold && cell_uniform(seed, timestep, height, width, depth, 0) < smbh_probability {
                             set_as_black_hole(cell, &next_black_hole_id);
                             cell.is_supermassive = true;
                             cell.is_rip_induced = false;
@@ -266,7 +276,7 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                             // u^alpha crushes most draws toward 0 (stalls) with a rare strong
                             // tail (runaway). Mode chooses whether the scale is tied to the
                             // depth of the curvature well or drawn independently.
-                            let u: f64 = rng.gen_range(0.0..1.0);
+                            let u: f64 = cell_uniform(seed, timestep, height, width, depth, 1);
                             let heavy_tail = u.powf(smbh_connection_alpha);
                             cell.smbh_connection_strength = match &smbh_connection_mode {
                                 SmbhConnectionMode::TiedToCurvature { rate } => rate * (cell.curvature - app_settings.smbh_curvature_threshold) * heavy_tail,
@@ -630,4 +640,28 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
     }
 
     return Ok(());
+}
+
+// ── Deterministic per-cell RNG ──────────────────────────────────────────────
+// The SMBH formation draws run inside the parallel cell pass, where a shared RNG
+// is non-deterministic (rayon's visit order across threads is not fixed). Each
+// (seed, timestep, cell, draw) tuple instead hashes to its own uniform value, so
+// a run is identical across repeats AND across thread counts. SplitMix64 mixing
+// is plenty for a Bernoulli trial and a power-law draw.
+#[inline]
+fn splitmix64(mut z: u64) -> u64 {
+    z = z.wrapping_add(0x9E3779B97F4A7C15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D049BB133111EB);
+    z ^ (z >> 31)
+}
+
+#[inline]
+fn cell_uniform(seed: u64, timestep: usize, h: usize, w: usize, d: usize, draw: u64) -> f64 {
+    let mut s = splitmix64(seed ^ (timestep as u64).wrapping_mul(0xD1B54A32D192ED03));
+    s = splitmix64(s ^ (h as u64).wrapping_mul(0x2545F4914F6CDD1D));
+    s = splitmix64(s ^ (w as u64).wrapping_mul(0x9E3779B97F4A7C15));
+    s = splitmix64(s ^ (d as u64).wrapping_mul(0x100000001B3));
+    s = splitmix64(s ^ draw);
+    (s >> 11) as f64 / ((1u64 << 53) as f64)
 }

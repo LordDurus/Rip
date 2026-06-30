@@ -2,11 +2,13 @@ use crate::database::entities::cell::Cell;
 use crate::database::entities::structure_particle::StructureParticle;
 use crate::helpers::particle::f64::consts::PI;
 use rand::Rng;
+use rand::SeedableRng;
+use rand::rngs::StdRng;
 use rayon::prelude::*;
 use std::f64;
 
-pub fn initialize_particles(positions: &mut Vec<(f64, f64, f64)>, velocities: &mut Vec<(f64, f64, f64)>) {
-    let mut rng = rand::thread_rng();
+pub fn initialize_particles(positions: &mut Vec<(f64, f64, f64)>, velocities: &mut Vec<(f64, f64, f64)>, seed: u64) {
+    let mut rng = StdRng::seed_from_u64(seed ^ 0x7061_7274_5F69_6E69);
     for i in 0..positions.len() {
         let theta = rng.gen_range(0.0..2.0 * PI);
         let phi = rng.gen_range(0.0..PI);

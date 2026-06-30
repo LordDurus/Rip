@@ -25,8 +25,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "rip_data.db"
-OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
+def find_root(start=None, marker="Cargo.toml"):
+    p = Path(start or __file__).resolve()
+    for d in (p, *p.parents):
+        if (d / marker).exists():
+            return d
+    raise SystemExit(f"repo root not found: no {marker} at or above {p}")
+REPO = find_root()
+DB_PATH = REPO / "data" / "rip_data.db"
+OUTPUT_DIR = REPO / "output"
 
 
 def resolve_timestep(conn, run_id, requested):

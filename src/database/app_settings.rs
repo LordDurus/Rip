@@ -244,6 +244,8 @@ pub struct AppSetting {
     pub lensing_matter_max: f64,
     /// Velocity of a dimple when created.
     pub dimple_birth_velocity_scale: f64,
+    /// Rnd seed value 0 for not assigned
+    pub seed: u64,
 }
 
 impl AppSetting {
@@ -320,6 +322,13 @@ impl AppSetting {
                 Some(AppValue::Int(v)) => *v as u32,
                 Some(AppValue::Float(v)) => *v as u32,
                 _ => panic!("Missing or invalid u32 setting for key: {}", key),
+            }
+        };
+        let get_u64 = |key: &str| -> u64 {
+            match map.get(&key.to_uppercase()) {
+                Some(AppValue::Int(v)) => *v as u64,
+                Some(AppValue::Float(v)) => *v as u64,
+                _ => panic!("Missing or invalid u64 setting for key: {}", key),
             }
         };
 
@@ -426,6 +435,7 @@ impl AppSetting {
             galaxy_match_min_overlap: get_f64("GALAXY_MATCH_MIN_OVERLAP"),
             use_dimple_particles: get_bool("USE_DIMPLE_PARTICLES"),
             max_dimple_particles: get_u32("MAX_DIMPLE_PARTICLES"),
+            seed: get_u64("seed"),
         }
     }
 

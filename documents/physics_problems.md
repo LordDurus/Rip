@@ -196,6 +196,48 @@ zero-density (outflow) instead of reflecting.
 
 ---
 
+## 7. Ram-pressure drag never fired — pressure forbids the pileup it gated on (bullet-cluster-phase1b)
+
+**Symptom.** A drag-coefficient sweep (`GAS_DRAG_COEFFICIENT` = 0.0, 0.1, 0.5, 2.0)
+returned **bit-identical** collisions — same `t_close`, `min_sep` (3.833), and
+offsets at every value, including 0.0 vs 2.0. The knob was completely inert. (Only
+legible because the seed-determinism work had just removed run-to-run noise; before
+it, four identical drag values scattered randomly and the inertness hid as "noise.")
+
+**Cause.** The drag damp was gated on `drag > 0.0 && c.matter_density > gas_shock_density`,
+with `GAS_SHOCK_DENSITY = 15`. But the gas clumps peak at `BULLET_CLUMP_PEAK_DENSITY
+= 10`, and BH/SMBH cells (the only cells above 15) hit the early `return` before the
+gate. The threshold could only be crossed by non-BH gas reaching 15 — which never
+happens in the first pass. Worse, the thermal-pressure term (§6) actively *prevents*
+it: pressure pushes gas down its own density gradient, so at collision the gas
+**decompresses** — max non-BH density *drops* from 10 to ~3.4 at closest approach
+(measured on the stability plot), exceeding 15 only much later (t>1200) during
+unrelated late structure collapse. The gate was waiting for a pileup that pressure
+guarantees won't form; the two gas mechanisms were at cross-purposes as tuned.
+
+**Fix.** Removed the gate: `if drag > 0.0 && c.matter_density > shock` → `if drag >
+0.0`. The existing `v *= (1 - drag·dt)` damp is already linear velocity drag (`a =
+-drag·v`); ungated, it decelerates all moving gas while the collisionless dimple is
+untouched, so the gas lags the dimple — the Bullet-Cluster offset — with no pileup
+required. `gas_shock_density` is now a dead setting (kept in `template.db` as the
+hook for a future real shock-capturing term). The useful coefficient bracket
+collapses with the gate gone: ungated, `0.98^447 ≈ 1e-4`, so drag = 2.0 freezes the
+gas; the live range is ~0.01–0.2, not the 0.1–2.0 first swept.
+
+**Status/Lesson.** Two lessons. (1) **A threshold gate is only valid if something can
+actually cross it** — and one mechanism can structurally forbid another's trigger:
+pressure caps the very density a density-gated drag needs, so they fought silently.
+Before gating term B on a field that term A controls, check that A permits B's
+threshold. (2) **A single combined `matter_density` field cannot represent ram
+pressure.** Real ram pressure is clump-A's gas pushing on clump-B's gas — the model
+can't tell "my gas" from "the medium I'm plowing through," so absolute density was
+the wrong proxy for "I'm in the collision." Density-scaling would fail identically
+(the profile is inverted vs. a real ICM: densest at infall, thinnest at collision).
+If ungated drag damps infall too much, the physical gate is *converging flow*
+(`div(v) < 0`), not density.
+
+---
+
 ## Open watch items (physics, not yet resolved)
 
 These are under observation, not fixed — listed so they're not lost.
@@ -207,11 +249,14 @@ These are under observation, not fixed — listed so they're not lost.
   directly by `plot_stability.py`, with a final-quarter "still rising vs leveled off"
   check.)
 
-- **Bullet-cluster first-pass offset with drag off (pressure-only quadrant).** Does a
-  measurable gas–dimple lag develop at first closest approach, or do the clumps
-  free-fall through each other too fast for pressure alone to produce one? Under
-  measurement via the first-pass offset diagnostic; the offset at the exact minimum is
-  smeared by window overlap, so the clean read is a few frames before merge.
+- **Bullet-cluster first-pass gas–dimple offset.** Drag-off (pressure-only) produced
+  no clean lag — the clumps pass through and the offset at minimum is smeared by window
+  overlap. Drag is now the mechanism (gate removed, §7); the open question is whether
+  ungated velocity drag yields a lag that opens up *at* collision rather than smearing
+  across the whole approach (if it smears, gate on converging flow `div(v) < 0`). The
+  offset metric itself also needs work: `right_off ≈ -14.5` is near-constant across
+  drag *and* seed — a per-clump-dimple-centroid artifact (the globally-clustered dimple
+  pins the half-box centroid), not a physical lag. Trustworthy only on `overlap=no` rows.
 
 - **Orphan SMBH ceiling (~10^6).** Read as a self-limiting equilibrium (growth tied to
   local curvature in a thinning void), *not* a runaway. Re-check on a 10000-step run:

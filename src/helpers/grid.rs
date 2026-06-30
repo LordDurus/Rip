@@ -4,17 +4,22 @@ use crate::database::entities::cell::Cell;
 use crate::initial_geometry::InitialGeometry;
 use indicatif::ProgressBar;
 use rand::Rng;
+use rand::SeedableRng;
+use rand::rngs::StdRng;
 
 pub fn populate_grid(
     geometry: &InitialGeometry,
     grid: &mut Vec<Vec<Vec<Cell>>>,
     db: &dyn DbProvider, // only used for Custom
+    seed: u64,
 ) -> rusqlite::Result<()> {
     let depth = grid.len();
     let height = if depth > 0 { grid[0].len() } else { 0 };
     let width = if height > 0 { grid[0][0].len() } else { 0 };
 
-    let mut rng = rand::thread_rng();
+    // Deterministic: distinct sub-seed off the master so blob placement is
+    // reproducible without correlating with the curvature/particle streams.
+    let mut rng = StdRng::seed_from_u64(seed ^ 0x6772_6964_5F70_6F70);
 
     match geometry {
         InitialGeometry::Uniform { density } => {
@@ -144,9 +149,9 @@ pub fn populate_grid(
     return Ok(());
 }
 
-pub fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSetting, db: &mut dyn DbProvider) -> Vec<crate::galaxy::Galaxy> {
+pub fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSetting, db: &mut dyn DbProvider, seed: u64) -> Vec<crate::galaxy::Galaxy> {
     let progress_bar: ProgressBar = ProgressBar::new((settings.inf_grid_height * settings.inf_grid_width * settings.inf_grid_depth) as u64);
-    let mut rng = rand::thread_rng();
+    let mut rng = StdRng::seed_from_u64(seed ^ 0x6375_7276_5F73_6565);
 
     // Galaxies are no longer seeded here. They emerge from the density field via
     // friends-of-friends after inflation (see galaxy::find_galaxies). The initial

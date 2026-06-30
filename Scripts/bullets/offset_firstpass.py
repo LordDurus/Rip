@@ -36,9 +36,15 @@ from pathlib import Path
 
 import numpy as np
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "rip_data.db"
-OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
-
+def find_root(start=None, marker="Cargo.toml"):
+    p = Path(start or __file__).resolve()
+    for d in (p, *p.parents):
+        if (d / marker).exists():
+            return d
+    raise SystemExit(f"repo root not found: no {marker} at or above {p}")
+REPO = find_root()
+DB_PATH = REPO / "data" / "rip_data.db"
+OUTPUT_DIR = REPO / "output"
 
 # ---------------------------------------------------------------------------
 # run / grid resolution
@@ -202,16 +208,34 @@ def first_closest_approach_index(seps, approach_frac):
     mags = [abs(s) for s in seps]
     baseline = mags[0]
     threshold = approach_frac * baseline
+    # Cells of jitter to ride through. Under drag the gas redistributes and the
+    # windowed separation picks up sub-cell wobble; a strict 'while decreasing'
+    # walk stops at the first such uptick -- a pre-collision FALSE minimum (this
+    # is why the drag sweep reported min_sep ~16 at t~420 when the real collision
+    # is ~7 at t~600). The margin must exceed that wobble but stay well below a
+    # genuine post-collision recovery (tens of cells).
+    margin = max(2.0, 0.08 * baseline)
 
     onset = next((i for i, m in enumerate(mags) if m < threshold), None)
     if onset is None:
         # No clear first-pass collision in range; best we can do is global min.
         return int(np.argmin(mags)), True
 
+    # Running-minimum walk from onset: track the deepest point of the first dip
+    # and only stop once separation has RECOVERED more than `margin` above it, so
+    # intra-dip jitter can't end the walk early. This finds the true bottom of the
+    # first approach, not the first noise wiggle after onset.
+    run_min = mags[onset]
+    run_min_idx = onset
     j = onset
-    while j + 1 < len(mags) and mags[j + 1] < mags[j]:
+    while j + 1 < len(mags):
         j += 1
-    return j, False
+        if mags[j] < run_min:
+            run_min = mags[j]
+            run_min_idx = j
+        elif mags[j] > run_min + margin:
+            break
+    return run_min_idx, False
 
 
 def refine(conn, run_id, ncol, window, timesteps, lo_t, hi_t):

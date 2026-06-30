@@ -32,8 +32,16 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SCRIPTS = Path(__file__).resolve().parent
-DB_PATH = REPO / "data" / "rip_data.db"
 TEMPLATE = REPO / "data" / "template.db"
+
+def find_root(start=None, marker="Cargo.toml"):
+    p = Path(start or __file__).resolve()
+    for d in (p, *p.parents):
+        if (d / marker).exists():
+            return d
+    raise SystemExit(f"repo root not found: no {marker} at or above {p}")
+REPO = find_root()
+DB_PATH = REPO / "data" / "rip_data.db"
 OUTPUT_DIR = REPO / "output"
 
 

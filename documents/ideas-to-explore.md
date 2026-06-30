@@ -482,7 +482,7 @@ These disagree on what `black_hole_id` means when a cell reverts:
   serial point.
 - Third option: a **new** `black_hole` row per collapse episode (no reuse) — simplest writes, but
   one physical location accrues many ids and "this BH's history" gets fuzzy.
-- This going to use a `black_hole` table with an is_acitve field and `black_hole_history` will leave 
+- This going to use a `black_hole` table with an is_active field and `black_hole_history` will leave 
   all the links in place and change the value of IsActive as needed.
 
 **Reversal physics (independent of bookkeeping).** `revert_black_hole` already dumps the residual

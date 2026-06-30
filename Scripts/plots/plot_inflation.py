@@ -9,9 +9,15 @@ import shutil
 import subprocess
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "rip_data.db"
-OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
-
+def find_root(start=None, marker="Cargo.toml"):
+    p = Path(start or __file__).resolve()
+    for d in (p, *p.parents):
+        if (d / marker).exists():
+            return d
+    raise SystemExit(f"repo root not found: no {marker} at or above {p}")
+REPO = find_root()
+DB_PATH = REPO / "data" / "rip_data.db"
+OUTPUT_DIR = REPO / "output"
 
 def save_png(path):
     if shutil.which("optipng.exe"):
