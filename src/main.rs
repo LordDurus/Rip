@@ -45,7 +45,6 @@ fn main() {
         eprintln!("Simulation error: {}", e);
     }
     let duration = start.elapsed();
-    //println!("All runs completed in {:?}", duration);
     println!("{} {:?}", "All runs completed in".cyan(), duration);
 
     print!("\x07"); // Beep to signal completion

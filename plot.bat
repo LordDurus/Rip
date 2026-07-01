@@ -27,6 +27,7 @@ cd scripts
 cd diagnostics
 py export_log.py --run-id %run_id%
 py dump_run_settings.py --run-id %run_id% >> %validation_file%
+py dimple_infall.py --run-id %run_id% >> %validation_file%
 cd ../generate
 py flowchart.py
 cd ../plots
