@@ -231,6 +231,11 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
         let new_dimple_particles: Arc<Mutex<Vec<StructureParticle>>> = Arc::new(Mutex::new(Vec::new()));
         let existing_dimple_count = dimple_particles.len();
 
+        // Shared read-only view of the gas bulk-velocity field for the parallel cell
+        // pass (disjoint from the &mut grid); dimple particles inherit it at birth so
+        // rip-processed matter keeps its momentum instead of being re-created at rest.
+        let gas_vel_ref = &gas_velocity;
+
         grid.par_iter_mut().enumerate().for_each(|(height, col)| {
             let running = Arc::clone(&running);
             let matter_delta = matter_delta_snapshot;
@@ -302,12 +307,14 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                         if cell.is_black_hole && !was_black_hole {
                             let deposit = app_settings.dimple_retention * matter_before_rip;
                             if app_settings.use_dimple_particles {
-                                // Tier 2: spawn a dark-matter particle instead of writing
-                                // the grid. Birth velocity = local gravity * scale (nothing
-                                // is truly at rest); rip_dimple is rebuilt from scatter later.
+                                // Tier 2: spawn a dark-matter particle instead of writing the
+                                // grid. Birth velocity = the local gas bulk velocity (momentum
+                                // conservation: the dimple is the matter that just ripped, so it
+                                // keeps that matter's motion); rip_dimple is rebuilt from scatter
                                 let cap = app_settings.max_dimple_particles as usize;
                                 let mut bucket = new_dimple_particles.lock().unwrap();
                                 if cap == 0 || existing_dimple_count + bucket.len() < cap {
+                                    let gv = gas_vel_ref[height][width][depth];
                                     let (pos, vel) = dimple_birth_state(
                                         height,
                                         width,
@@ -315,7 +322,7 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
                                         app_settings.inf_grid_height,
                                         app_settings.inf_grid_width,
                                         app_settings.inf_grid_depth,
-                                        (cell.gravity_x, cell.gravity_y, cell.gravity_z),
+                                        (gv[0], gv[1], gv[2]),
                                         app_settings.dimple_birth_velocity_scale,
                                     );
                                     bucket.push(StructureParticle {

@@ -14,6 +14,7 @@ Usage:
 """
 import argparse
 import csv
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -49,6 +50,7 @@ def resolve_run_id(conn, requested):
 
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     ap = argparse.ArgumentParser(description="Export the DB log table to CSV.")
     ap.add_argument("--run-id", type=int, default=None, help="Run to export (default: latest run with log rows)")
     ap.add_argument("--all", action="store_true", help="Export every run instead of a single one")

@@ -28,6 +28,7 @@ Notes:
 """
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -78,6 +79,7 @@ def text_size(draw, text, font):
     return box[2] - box[0], box[3] - box[1]
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     ap = argparse.ArgumentParser(description="Combine run PNGs into one validation sheet.")
     ap.add_argument("--folder", default="output", help="folder containing the PNGs")
     ap.add_argument("--run-id", "--run", dest="run", type=int, default=None,

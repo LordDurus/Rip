@@ -19,6 +19,7 @@ Examples:
 """
 
 import argparse
+import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -93,11 +94,9 @@ def load_settings(conn, run_id):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Dump a run's run_setting snapshot for validation.txt."
-    )
-    parser.add_argument("--run-id", type=int, default=None,
-                        help="Run ID to dump (default: most recent completed run).")
+    print(f"Running: {os.path.basename(__file__)}")
+    parser = argparse.ArgumentParser(description="Dump a run's run_setting snapshot for validation.txt.")
+    parser.add_argument("--run-id", type=int, default=None, help="Run ID to dump (default: most recent completed run).")
     parser.add_argument("--expect", nargs="*", default=DEFAULT_EXPECT,
                         help="Keys that MUST be present; missing ones are flagged. "
                              "Pass with no values to disable the check.")

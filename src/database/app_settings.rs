@@ -242,7 +242,7 @@ pub struct AppSetting {
     pub lensing_dimple_min: f64,
     /// Lensing diagnostic: upper matter_density bound for a lensing candidate.
     pub lensing_matter_max: f64,
-    /// Velocity of a dimple when created.
+    /// Retained momentum fraction
     pub dimple_birth_velocity_scale: f64,
     /// Rnd seed value 0 for not assigned
     pub seed: u64,

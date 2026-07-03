@@ -27,7 +27,13 @@ Four views:
      sea that drowns them. The dissolution time (fraction first < 0.5) is the moment
      the two-halo geometry stops existing -- the ceiling on any Bullet-Cluster window.
      Peak contrast (peak / background) is overlaid faintly.
-  D. Column profiles at start / collision / late: gas, RAW dimple, EXCESS dimple, and
+  Also measures THE OBSERVABLE: the lensing proxy (gas + dimple = total non-BH
+gravitating mass, what a lensing map would see) vs the gas alone -- both the
+per-side centroid offset and the dark fraction of the mass. The Bullet-Cluster
+observation needs BOTH: mass peaks offset from the gas AND the dark component
+carrying most of the mass (observed clusters: dark ~5-6x the gas).
+
+D. Column profiles at start / collision / late: gas, RAW dimple, EXCESS dimple, and
      BH count. Shows spatially whether the dimple is two halos or a flat sea.
 
 VALID REGIME: the midpoint col-split tracks the two clumps cleanly only through the
@@ -38,6 +44,7 @@ Usage: py dimple_infall.py [--run-id N] [--stride 25] [--window 6]
          [--bg-percentile 50] [--times T1 T2 T3] [--max-timestep T] [--db PATH]
 """
 import argparse
+import os
 import sqlite3
 from pathlib import Path
 import numpy as np
@@ -61,6 +68,7 @@ BLUE = "tab:blue"
 GREEN = "tab:green"
 PURPLE = "tab:purple"
 GRAY = "gray"
+TAB_RED = "tab:red"
 
 
 def resolve_run_id(conn, requested):
@@ -144,7 +152,7 @@ def half_centroid(weights, lo, hi, window):
     return float((idx * w).sum() / w.sum())
 
 
-def dissolution_time(T, frac, thresh=0.5):
+def dissolution_time(time, frac, thresh=0.5):
     """Timestep after which the clumped fraction never again reaches `thresh`: the
     point where the two DM halos are gone FOR GOOD. Defined as the sample right after
     the LAST one at/above thresh, so a brief early transient dip (which recovers, and
@@ -158,10 +166,11 @@ def dissolution_time(T, frac, thresh=0.5):
     last = int(above[-1])
     if last >= len(frac) - 1:
         return None                        # still clumped at the end -> survives
-    return int(T[last + 1])
+    return int(time[last + 1])
 
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-id", type=int, default=None)
     ap.add_argument("--stride", type=int, default=25)
@@ -199,6 +208,8 @@ def main():
     lo_ex_d, hi_ex_d = [], []                   # EXCESS-dimple distance-to-center
     lo_ex_c, hi_ex_c = [], []                   # EXCESS-dimple signed centroid (for offset)
     lo_raw_d, hi_raw_d = [], []                 # RAW-dimple distance-to-center
+    lo_lens_c, hi_lens_c = [], []               # LENSING (gas+dimple) centroids
+    dark_frac = []                              # dimple / (gas+dimple) mass fraction
     lo_gas_c, hi_gas_c = [], []                 # gas centroids (collision detect)
     total_dim, bh_total = [], []
     clumped_frac, contrast = [], []             # flood metrics
@@ -217,6 +228,9 @@ def main():
         hd_raw = half_centroid(dim, mid, ncol, args.window)
         ld_ex = half_centroid(exc, 0, mid, args.window)
         hd_ex = half_centroid(exc, mid, ncol, args.window)
+        lens = gas + dim                        # what a lensing map sees (non-BH)
+        ll = half_centroid(lens, 0, mid, args.window)
+        hl = half_centroid(lens, mid, ncol, args.window)
 
         T.append(t)
         lo_gas_c.append(lg); hi_gas_c.append(hg)
@@ -228,11 +242,15 @@ def main():
         hi_ex_c.append(hd_ex if hd_ex is not None else np.nan)
         lo_raw_d.append(abs(ld_raw - center) if ld_raw is not None else np.nan)
         hi_raw_d.append(abs(hd_raw - center) if hd_raw is not None else np.nan)
+        lo_lens_c.append(ll if ll is not None else np.nan)
+        hi_lens_c.append(hl if hl is not None else np.nan)
 
         dtot = float(dim.sum())
         total_dim.append(dtot)
         bh_total.append(float(bh.sum()))
         clumped_frac.append(float(exc.sum() / dtot) if dtot > 0 else np.nan)
+        gtot = float(gas.sum())
+        dark_frac.append(dtot / (gtot + dtot) if (gtot + dtot) > 0 else np.nan)
         contrast.append(float(dim.max() / bg) if bg > 0 else np.nan)
         if (k + 1) % 20 == 0 or k + 1 == len(sampled):
             print(f"  ...{k + 1}/{len(sampled)}", flush=True)
@@ -315,6 +333,48 @@ def main():
                            else "coincident")
                 print(f"  {name}: DM leads gas by {lead:+.2f} cells  -- {verdict}")
 
+    # --- THE OBSERVABLE: would a lensing map peak off the gas? ---
+    # Model-independent Bullet-Cluster signature: (a) the TOTAL gravitating mass
+    # (gas + dimple; what lensing measures) sits offset from the gas, and (b) the
+    # dark component carries most of that mass (observed: dark ~5-6x gas, i.e.
+    # dark fraction ~0.83-0.86). Geometry alone cannot move the lensing peak off
+    # the gas while the gas dominates the mass budget.
+    dark_frac = np.asarray(dark_frac, float)
+    lens_lo_c = np.asarray(lo_lens_c, float)
+    lens_hi_c = np.asarray(hi_lens_c, float)
+    df_coll = float(dark_frac[i_coll])
+    print(f"\nTHE OBSERVABLE -- lensing map (gas+dimple) vs gas, at collision (t={t_coll}):")
+    print(f"  dark fraction of gravitating mass: start {dark_frac[0]:.3f}, "
+          f"collision {df_coll:.3f}, late {dark_frac[-1]:.3f}   (observed clusters ~0.83)")
+    # outward = away from center along each side's travel axis: the observed
+    # morphology is mass peaks OUTSIDE the central gas, so + = matches observation.
+    out_lo = gas_lo_c[i_coll] - lens_lo_c[i_coll]
+    out_hi = lens_hi_c[i_coll] - gas_hi_c[i_coll]
+    for name, outw in (("LOW", out_lo), ("HIGH", out_hi)):
+        if not np.isfinite(outw):
+            print(f"  {name}: no lensing centroid on this side.")
+        else:
+            where = ("OUTWARD of" if outw > 0.25 else "INWARD of" if outw < -0.25
+                     else "coincident with")
+            print(f"  {name}: lensing centroid sits {outw:+.2f} cells {where} the gas centroid")
+    if df_coll < 0.5:
+        print(f"  VERDICT: dark mass is only {df_coll * 100:.0f}% of the total, so the lensing")
+        print("  map tracks the GAS regardless of where the dimple sits -- the observed")
+        print("  offset needs the dark component to dominate WHILE two halos still exist.")
+    else:
+        print(f"  VERDICT: dark mass dominates ({df_coll * 100:.0f}%) -- the lensing offsets")
+        print("  above are now the real observable; + on both sides = Bullet-like.")
+    if t_diss is not None:
+        i_dom = np.nonzero(dark_frac >= 0.5)[0]
+        if i_dom.size:
+            t_dom = int(T[i_dom[0]])
+            gap = "BEFORE" if t_dom <= t_diss else "AFTER"
+            print(f"  timing: dark fraction first reaches 0.5 at t~{t_dom}, which is {gap} "
+                  f"the halos dissolve (t~{t_diss}).")
+        else:
+            print(f"  timing: dark fraction never reaches 0.5 in this run "
+                  f"(halos dissolve at t~{t_diss}).")
+
     # --- profile snapshot timesteps ---
     snaps = args.times if args.times else [tmin, t_coll, tmax]
     snap_labels = [f"t={s}" for s in snaps] if args.times \
@@ -343,7 +403,7 @@ def main():
     plot_a.plot(T, hi_raw_d, ":", color=BLUE, lw=1.0, alpha=0.55, label="HIGH dimple (raw)")
     plot_a.axvline(t_coll, color=GRAY, ls=":", lw=1.0, label=f"collision (t={t_coll})")
     if t_diss is not None:
-        plot_a.axvline(t_diss, color="tab:red", ls="--", lw=1.0, label=f"halos dissolve (t~{t_diss})")
+        plot_a.axvline(t_diss, color=TAB_RED, ls="--", lw=1.0, label=f"halos dissolve (t~{t_diss})")
     plot_a.set_ylabel("distance to center (cells)")
     plot_a.set_title("A. Infall: gas (solid) collapses; EXCESS dimple (bold dash) is the real "
                      "halo, RAW (dotted) floods to center", fontsize=10, loc="left")
@@ -366,16 +426,17 @@ def main():
 
     # Panel C: FLOOD metric -- clumped fraction (+ contrast on twin)
     plot_c = fig.add_subplot(gs[2, :])
-    plot_c.plot(T, clumped_frac, color="tab:red", lw=1.6, label="clumped fraction (excess / total)")
+    plot_c.plot(T, clumped_frac, color=TAB_RED, lw=1.6, label="clumped fraction (excess / total)")
+    plot_c.plot(T, dark_frac, color=GREEN, lw=1.6, label="dark fraction of mass (dimple / total)")
     plot_c.axhline(0.5, color=GRAY, ls="--", lw=0.8)
     plot_c.axvline(t_coll, color=GRAY, ls=":", lw=1.0, label=f"collision (t={t_coll})")
     if t_diss is not None:
-        plot_c.axvline(t_diss, color="tab:red", ls="--", lw=1.0, label=f"dissolve (t~{t_diss})")
-    plot_c.set_ylabel("clumped fraction", color="tab:red")
-    plot_c.tick_params(axis="y", labelcolor="tab:red")
+        plot_c.axvline(t_diss, color=TAB_RED, ls="--", lw=1.0, label=f"dissolve (t~{t_diss})")
+    plot_c.set_ylabel("clumped fraction", color=TAB_RED)
+    plot_c.tick_params(axis="y", labelcolor=TAB_RED)
     plot_c.set_ylim(0, 1.02)
-    plot_c.set_title("C. Flood metric: fraction of dimple mass in the two halos vs a global sea "
-                     "(1 = all halo, 0 = pure sea)", fontsize=10, loc="left")
+    plot_c.set_title("C. Flood metric (red) + dark mass fraction (green): the Bullet observable "
+                     "needs green high WHILE red is high", fontsize=10, loc="left")
     plot_c.legend(loc="upper right", fontsize=8)
     plot_c.grid(True, alpha=0.3)
     twin_c = plot_c.twinx()
@@ -392,8 +453,12 @@ def main():
         gmax = gas.max() if gas.max() > 0 else 1.0
         dmax = dim.max() if dim.max() > 0 else 1.0
         plot_d.fill_between(cols, gas / gmax, color=ORANGE, alpha=0.40, label="gas (norm)")
+        lens = gas + dim
+        lmax = lens.max() if lens.max() > 0 else 1.0
+        plot_d.plot(cols, lens / lmax, color=GREEN, lw=1.8,
+                    label="LENSING gas+dimple (norm)")
         plot_d.plot(cols, dim / dmax, color=PURPLE, lw=1.2, alpha=0.55, label="dimple raw (norm)")
-        plot_d.plot(cols, exc / dmax, color="tab:red", lw=1.6, label="dimple excess (norm)")
+        plot_d.plot(cols, exc / dmax, color=TAB_RED, lw=1.6, label="dimple excess (norm)")
         if bh.max() > 0:
             plot_d.bar(cols, bh / bh.max() * 0.5, width=1.0, color=GRAY, alpha=0.4,
                        label="BH count (norm)")

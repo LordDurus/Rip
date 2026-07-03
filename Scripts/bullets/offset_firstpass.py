@@ -369,14 +369,13 @@ def make_plot(coarse, best, run_id):
 # ---------------------------------------------------------------------------
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     parser = argparse.ArgumentParser(
         description="Auto-detect the first closest approach and report the "
                     "gas-dimple offset there."
     )
-    parser.add_argument("--run-id", type=int, default=None,
-                        help="Run ID (default: most recent completed run).")
-    parser.add_argument("--coarse-stride", type=int, default=25,
-                        help="Timestep stride for the coarse separation scan "
+    parser.add_argument("--run-id", type=int, default=None, help="Run ID (default: most recent completed run).")
+    parser.add_argument("--coarse-stride", type=int, default=25, help="Timestep stride for the coarse separation scan "
                              "(default: 25).")
     parser.add_argument("--window", type=int, default=8,
                         help="Half-width (cells) of the centroid window around "

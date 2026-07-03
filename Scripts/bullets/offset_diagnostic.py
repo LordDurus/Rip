@@ -24,9 +24,9 @@ first closest approach for exactly that reason; offsets sampled after the
 clumps cross are meaningless with this split.
 
 Examples:
-    py bullet_offset_firstpass.py
-    py bullet_offset_firstpass.py --run-id 7 --coarse-stride 20 --window 8
-    py bullet_offset_firstpass.py --max-timestep 1800 --no-plot
+    py offset_diagnostic.py
+    py offset_diagnostic.py --run-id 7 --coarse-stride 20 --window 8
+    py offset_diagnostic.py --max-timestep 1800 --no-plot
 """
 
 import argparse
@@ -268,7 +268,7 @@ def _lag_word(offset):
     return "coincident with"
 
 
-def make_plot(coarse, best, run_id):
+def make_plot(coarse, best, run_id, scan_end):
     try:
         import matplotlib
         matplotlib.use("Agg")
@@ -279,8 +279,8 @@ def make_plot(coarse, best, run_id):
 
     ts = [m["timestep"] for m in coarse]
     sep = [abs(m["separation"]) for m in coarse]
-    loff = [m["left_offset"] for m in coarse]
-    roff = [m["right_offset"] for m in coarse]
+    loff = [np.nan if m["left_offset"] is None else m["left_offset"] for m in coarse]
+    roff = [np.nan if m["right_offset"] is None else m["right_offset"] for m in coarse]
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 7), sharex=True)
     fig.suptitle(f"First-pass collision diagnostic -- Run {run_id}", fontsize=13)
@@ -305,7 +305,7 @@ def make_plot(coarse, best, run_id):
 
     plt.tight_layout()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    out = OUTPUT_DIR / f"offset_firstpass_run{run_id}.png"
+    out = OUTPUT_DIR / f"offset_diagnostic_run{run_id}_t{scan_end}.png"
     plt.savefig(out, dpi=300)
     plt.close()
     print(f"Saved plot: {out}")
@@ -361,7 +361,8 @@ def main():
     report(best, coarse, ncol, args.window, args.coarse_stride)
 
     if not args.no_plot:
-        make_plot(coarse, best, run_id)
+        scan_end = args.max_timestep if args.max_timestep is not None else coarse[-1]["timestep"]
+        make_plot(coarse, best, run_id, scan_end)
 
 
 if __name__ == "__main__":
