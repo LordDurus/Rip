@@ -31,6 +31,7 @@ Examples:
 
 import argparse
 import json
+import os
 import sqlite3
 from pathlib import Path
 

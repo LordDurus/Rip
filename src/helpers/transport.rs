@@ -209,6 +209,7 @@ pub fn apply_gas_momentum(grid: &mut Vec<Vec<Vec<Cell>>>, gas_velocity: &mut Vec
     let drag = settings.gas_drag_coefficient;
     let cs = settings.gas_sound_speed;
     let pressure_on = settings.gas_pressure_enabled && cs > 0.0;
+    let upwind_on = settings.gas_pressure_upwind;
 
     // read-only BH mask — pass 3 mutates the grid, so it can't read neighbors off it
     let is_bh: Vec<Vec<Vec<bool>>> = grid.iter().map(|p| p.iter().map(|r| r.iter().map(|c| c.is_black_hole).collect()).collect()).collect();
@@ -253,9 +254,48 @@ pub fn apply_gas_momentum(grid: &mut Vec<Vec<Vec<Cell>>>, gas_velocity: &mut Vec
                             let n = &cells[hh][ww][dd];
                             if n.is_black_hole { rho } else { n.matter_density }
                         };
-                        let grad_h = 0.5 * (rho_at(hp, w, d) - rho_at(hm, w, d));
-                        let grad_w = 0.5 * (rho_at(h, wp, d) - rho_at(h, wm, d));
-                        let grad_d = 0.5 * (rho_at(h, w, dp) - rho_at(h, w, dm));
+                        // Upwind (velocity-signed one-sided) gradient, gated on
+                        // GAS_PRESSURE_UPWIND. Central differences skip the immediate
+                        // neighbors, so a 2-cell odd-even (checkerboard) mode has
+                        // grad == 0 exactly -- the pressure force is blind to the one
+                        // mode it must damp, while donor-cell advection sources noise
+                        // at that wavelength and the FFT gravity is also Nyquist-blind:
+                        // a source with no sink, hence the late-run plaid. One-sided
+                        // differences couple adjacent cells, so every 2-cell extremum
+                        // feels a restoring push; the price is first-order numerical
+                        // diffusion ~ c_s*dx/2, which IS the damping we want. The side
+                        // is chosen upwind of the current velocity component (post
+                        // gravity kick); at v == 0 exactly, take the steeper one-sided
+                        // slope so a stationary checkerboard is still damped (either
+                        // side pushes gas off the extremum -- central would return 0
+                        // and freeze the artifact in place). BH no-flux is preserved:
+                        // rho_at clamps a BH neighbor to the local rho, so the one-sided
+                        // difference across a rip face is 0, same as before.
+                        // upwind_on = false is byte-identical to the central path.
+                        let upwind = |vc: f64, back: f64, fwd: f64| -> f64 {
+                            if vc > 0.0 {
+                                back
+                            } else if vc < 0.0 {
+                                fwd
+                            } else if back.abs() >= fwd.abs() {
+                                back
+                            } else {
+                                fwd
+                            }
+                        };
+                        let (grad_h, grad_w, grad_d) = if upwind_on {
+                            (
+                                upwind(v[0], rho - rho_at(hm, w, d), rho_at(hp, w, d) - rho),
+                                upwind(v[1], rho - rho_at(h, wm, d), rho_at(h, wp, d) - rho),
+                                upwind(v[2], rho - rho_at(h, w, dm), rho_at(h, w, dp) - rho),
+                            )
+                        } else {
+                            (
+                                0.5 * (rho_at(hp, w, d) - rho_at(hm, w, d)),
+                                0.5 * (rho_at(h, wp, d) - rho_at(h, wm, d)),
+                                0.5 * (rho_at(h, w, dp) - rho_at(h, w, dm)),
+                            )
+                        };
                         let k = -(cs * cs) / rho * dt; // v += a*dt = -(c_s^2/rho)*grad(rho)*dt
                         v[0] += k * grad_h;
                         v[1] += k * grad_w;

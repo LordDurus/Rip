@@ -34,10 +34,10 @@ impl InitialGeometry {
         match settings.initial_geometry.to_lowercase().as_str() {
             "uniform" => Self::Uniform { density: settings.uniform_density },
             "blobs" | "gaussian_blobs" => Self::GaussianBlobs {
-                count: settings.blob_count,
-                peak_density: settings.blob_peak_density,
-                sigma_min: settings.blob_sigma_min,
-                sigma_max: settings.blob_sigma_max,
+                count: settings.gaussian_blob_count,
+                peak_density: settings.gaussian_blob_peak_density,
+                sigma_min: settings.gaussian_blob_sigma_min,
+                sigma_max: settings.gaussian_blob_sigma_max,
             },
             "perlin" => Self::Perlin {
                 octaves: settings.perlin_octaves,

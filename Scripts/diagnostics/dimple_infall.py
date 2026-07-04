@@ -44,7 +44,6 @@ Usage: py dimple_infall.py [--run-id N] [--stride 25] [--window 6]
          [--bg-percentile 50] [--times T1 T2 T3] [--max-timestep T] [--db PATH]
 """
 import argparse
-import os
 import sqlite3
 from pathlib import Path
 import numpy as np
@@ -117,6 +116,85 @@ def col_profile(conn, run_id, timestep, ncol):
     return gas, dim, bh
 
 
+def n_rows(conn):
+    row = conn.execute("SELECT MAX(row) FROM cell_position").fetchone()
+    if row is None or row[0] is None:
+        raise SystemExit("cell_position is empty -- no grid.")
+    return int(row[0]) + 1
+
+
+def grid2d(conn, run_id, timestep, ncol, nrow):
+    """One indexed query -> (gas2, dim2) arrays over (row, col), depth-summed,
+    non-BH only. The 2D view that the 1D column projection washes out."""
+    gas = np.zeros((nrow, ncol))
+    dim = np.zeros((nrow, ncol))
+    for col, row, g, d in conn.execute(
+        """SELECT cp.col, cp.row,
+                  SUM(CASE WHEN c.is_black_hole=0 THEN c.matter_density ELSE 0 END),
+                  SUM(CASE WHEN c.is_black_hole=0 THEN MAX(c.rip_dimple, 0.0) ELSE 0 END)
+           FROM cell c JOIN cell_position cp ON c.cell_position_id=cp.cell_position_id
+           WHERE c.run_id=? AND c.timestep=?
+           GROUP BY cp.col, cp.row""", (run_id, timestep)):
+        gas[int(row), int(col)] = g or 0.0
+        dim[int(row), int(col)] = d or 0.0
+    return gas, dim
+
+
+def smooth3(a):
+    """3x3 box smoothing (edge-padded, numpy-only) so 2D peak-finding is not
+    hijacked by single hot cells or the gas checkerboard mode."""
+    p = np.pad(a, 1, mode="edge")
+    h, w = a.shape
+    return sum(p[i:i + h, j:j + w] for i in range(3) for j in range(3)) / 9.0
+
+
+def disk_mask(shape, r0, c0, radius):
+    rr, cc = np.ogrid[:shape[0], :shape[1]]
+    return (rr - r0) ** 2 + (cc - c0) ** 2 <= radius ** 2
+
+
+def halo2d_metrics(gas2, dim2, mid, pct, radius):
+    """Per-timestep 2D halo measurements. For each half of the collision axis:
+    the (smoothed) dimple peak and a disk of `radius` cells around it. Returns:
+      halo_frac  -- excess dimple mass inside the two disks / total excess mass
+                    (concentration: does a two-halo geometry exist?)
+      halo_share -- disk excess / TOTAL dimple mass (comparable to the 1D
+                    clumped fraction; how much of the whole field is halo)
+      contrast   -- smoothed peak / percentile floor
+      per side: dimple peak (row,col), in-halo dark fraction dimple/(gas+dimple),
+                lensing-peak and gas-peak locations and their distance in cells."""
+    floor = float(np.percentile(dim2, pct))
+    exc2 = np.clip(dim2 - floor, 0.0, None)
+    sm_dim = smooth3(dim2)
+    sm_gas = smooth3(gas2)
+    sm_lens = smooth3(gas2 + dim2)
+    total_exc = float(exc2.sum())
+    total_dim2 = float(dim2.sum())
+    out = {"floor": floor}
+    disk_exc = 0.0
+    for side, c_lo, c_hi in (("LOW", 0, mid), ("HIGH", mid, dim2.shape[1])):
+        seg = sm_dim[:, c_lo:c_hi]
+        r0, c0 = np.unravel_index(int(np.argmax(seg)), seg.shape)
+        c0 += c_lo
+        m = disk_mask(dim2.shape, r0, c0, radius)
+        disk_exc += float(exc2[m].sum())
+        d_in = float(dim2[m].sum())
+        g_in = float(gas2[m].sum())
+        rl, cl = np.unravel_index(int(np.argmax(sm_lens[:, c_lo:c_hi])), seg.shape)
+        rg, cg = np.unravel_index(int(np.argmax(sm_gas[:, c_lo:c_hi])), seg.shape)
+        out[side] = {
+            "peak": (int(r0), int(c0)),
+            "dark_in": d_in / (d_in + g_in) if (d_in + g_in) > 0 else float("nan"),
+            "lens_peak": (int(rl), int(cl + c_lo)),
+            "gas_peak": (int(rg), int(cg + c_lo)),
+            "lens_gas_off": float(np.hypot(rl - rg, cl - cg)),
+        }
+    out["halo_frac"] = disk_exc / total_exc if total_exc > 0 else float("nan")
+    out["halo_share"] = disk_exc / total_dim2 if total_dim2 > 0 else float("nan")
+    out["contrast"] = float(sm_dim.max() / floor) if floor > 0 else float("nan")
+    return out
+
+
 def background_level(profile, pct):
     """Robust 'uniform-sea floor' of a column profile: the pct-th percentile.
     A flat sea makes most columns equal, so the percentile lands on the sea; the
@@ -170,7 +248,6 @@ def dissolution_time(time, frac, thresh=0.5):
 
 
 def main():
-    print(f"Running: {os.path.basename(__file__)}")
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-id", type=int, default=None)
     ap.add_argument("--stride", type=int, default=25)
@@ -182,6 +259,8 @@ def main():
                     help="three timesteps for the profile snapshots "
                          "(default: start, auto-detected collision, end)")
     ap.add_argument("--max-timestep", type=int, default=None)
+    ap.add_argument("--halo-radius", type=int, default=10,
+                    help="Disk radius (cells) around each 2D dimple peak (default 10).")
     ap.add_argument("--db", default=str(DB_PATH))
     args = ap.parse_args()
 
@@ -191,6 +270,7 @@ def main():
     conn = sqlite3.connect(db)
     run_id = resolve_run_id(conn, args.run_id)
     ncol = n_cols(conn)
+    nrow = n_rows(conn)
     center = ncol / 2.0
     mid = ncol // 2
     pct = args.bg_percentile
@@ -213,6 +293,9 @@ def main():
     lo_gas_c, hi_gas_c = [], []                 # gas centroids (collision detect)
     total_dim, bh_total = [], []
     clumped_frac, contrast = [], []             # flood metrics
+    halo_frac2, halo_share2 = [], []            # 2D concentration + mass share
+    dark_in_lo, dark_in_hi = [], []             # 2D in-halo dark fraction per side
+    lens_off_lo, lens_off_hi = [], []           # 2D lensing-vs-gas peak distance
     for k, t in enumerate(sampled):
         gas, dim, bh = col_profile(conn, run_id, t, ncol)
         if gas.sum() <= 0:
@@ -252,6 +335,15 @@ def main():
         gtot = float(gas.sum())
         dark_frac.append(dtot / (gtot + dtot) if (gtot + dtot) > 0 else np.nan)
         contrast.append(float(dim.max() / bg) if bg > 0 else np.nan)
+
+        gas2, dim2 = grid2d(conn, run_id, t, ncol, nrow)
+        h2 = halo2d_metrics(gas2, dim2, mid, pct, args.halo_radius)
+        halo_frac2.append(h2["halo_frac"])
+        halo_share2.append(h2["halo_share"])
+        dark_in_lo.append(h2["LOW"]["dark_in"])
+        dark_in_hi.append(h2["HIGH"]["dark_in"])
+        lens_off_lo.append(h2["LOW"]["lens_gas_off"])
+        lens_off_hi.append(h2["HIGH"]["lens_gas_off"])
         if (k + 1) % 20 == 0 or k + 1 == len(sampled):
             print(f"  ...{k + 1}/{len(sampled)}", flush=True)
     if not T:
@@ -262,6 +354,9 @@ def main():
     # dissolution first: a Bullet-Cluster signal is only measurable while two DM
     # halos still exist, so it bounds the window we search for the gas collision.
     t_diss = dissolution_time(T, clumped_frac, 0.5)
+    halo_frac2 = np.asarray(halo_frac2, float)
+    halo_share2 = np.asarray(halo_share2, float)
+    t_diss2 = dissolution_time(T, halo_frac2, 0.5)
 
     # gas closest approach WITHIN the halo-alive window. Global argmin lands in the
     # post-crossing separation noise (the midpoint split mis-assigns clumps after the
@@ -305,6 +400,39 @@ def main():
               "(dimple is a sea from early on).")
     else:
         print("  clumped fraction stays >= 0.5 -- halos survive (no dissolution detected).")
+
+    # --- 2D halo metrics: the (col,row) view the 1D projection washes out ---
+    def v_at(arr, t):
+        return float(np.asarray(arr, float)[int(np.argmin(np.abs(T - t)))])
+
+    print(f"\n2D HALO METRICS ((col,row) projection, disks r={args.halo_radius} around "
+          f"each side's dimple peak):")
+    print(f"  halo concentration 2D (disk excess / total excess): "
+          f"start {v_at(halo_frac2, tmin):.2f}   collision {v_at(halo_frac2, t_coll):.2f}"
+          f"   late {v_at(halo_frac2, tmax):.2f}")
+    print(f"  halo mass share 2D (disk excess / total dimple):    "
+          f"start {v_at(halo_share2, tmin):.2f}   collision {v_at(halo_share2, t_coll):.2f}"
+          f"   late {v_at(halo_share2, tmax):.2f}")
+    if t_diss2 is not None:
+        print(f"  2D verdict: two-halo geometry DISSOLVES at t~{t_diss2}", end="")
+    elif np.all(halo_frac2[np.isfinite(halo_frac2)] < 0.5):
+        print("  2D verdict: never concentrated -- sea from the start", end="")
+    else:
+        print(f"  2D verdict: two-halo geometry SURVIVES to t={tmax}", end="")
+    one_d_never = t_diss is None and bool(np.all(clumped_frac < 0.5))
+    two_d_alive = t_diss2 is None and not bool(np.all(halo_frac2[np.isfinite(halo_frac2)] < 0.5))
+    if two_d_alive and (t_diss is not None or one_d_never):
+        what = f"dissolve at t~{t_diss}" if t_diss is not None else "no halos at all"
+        print(f"   (1D said {what}: PROJECTION WASHOUT -- trust 2D)")
+    elif t_diss is not None and t_diss2 is not None and t_diss2 > t_diss:
+        print(f"   (1D said t~{t_diss}: projection undersold the halos)")
+    else:
+        print()
+    print("  in-halo dark fraction (dimple/(gas+dimple) inside each disk; observed clusters ~0.83):")
+    print(f"    LOW:  collision {v_at(dark_in_lo, t_coll):.2f} -> late {v_at(dark_in_lo, tmax):.2f}"
+          f"      HIGH: collision {v_at(dark_in_hi, t_coll):.2f} -> late {v_at(dark_in_hi, tmax):.2f}")
+    print(f"  lensing peak vs gas peak, 2D per-side distance (cells): "
+          f"LOW {v_at(lens_off_lo, tmax):.1f}, HIGH {v_at(lens_off_hi, tmax):.1f} at late")
 
     # --- excess-DM vs gas offset at the in-window closest approach (the signature) ---
     ex_lo_c = np.asarray(lo_ex_c, float)
@@ -380,9 +508,12 @@ def main():
     snap_labels = [f"t={s}" for s in snaps] if args.times \
         else ["start", f"collision (t={t_coll})", "late"]
     profiles = []
+    maps2d = []
     for snap in snaps:
         s_real = min(ts_all, key=lambda x, snap=snap: abs(x - snap))
         profiles.append((s_real, col_profile(conn, run_id, s_real, ncol)))
+        g2, d2 = grid2d(conn, run_id, s_real, ncol, nrow)
+        maps2d.append((s_real, g2, d2, halo2d_metrics(g2, d2, mid, pct, args.halo_radius)))
     conn.close()
 
     # --- figure ---
@@ -426,17 +557,23 @@ def main():
 
     # Panel C: FLOOD metric -- clumped fraction (+ contrast on twin)
     plot_c = fig.add_subplot(gs[2, :])
-    plot_c.plot(T, clumped_frac, color=TAB_RED, lw=1.6, label="clumped fraction (excess / total)")
+    plot_c.plot(T, clumped_frac, color=TAB_RED, lw=1.6, label="clumped fraction 1D (excess / total)")
+    plot_c.plot(T, halo_frac2, "--", color=TAB_RED, lw=1.6, label="halo concentration 2D (disk / excess)")
     plot_c.plot(T, dark_frac, color=GREEN, lw=1.6, label="dark fraction of mass (dimple / total)")
+    plot_c.plot(T, 0.5 * (np.asarray(dark_in_lo, float) + np.asarray(dark_in_hi, float)),
+                "--", color=GREEN, lw=1.6, label="in-halo dark fraction 2D (mean of sides)")
     plot_c.axhline(0.5, color=GRAY, ls="--", lw=0.8)
     plot_c.axvline(t_coll, color=GRAY, ls=":", lw=1.0, label=f"collision (t={t_coll})")
     if t_diss is not None:
-        plot_c.axvline(t_diss, color=TAB_RED, ls="--", lw=1.0, label=f"dissolve (t~{t_diss})")
+        plot_c.axvline(t_diss, color=TAB_RED, ls="--", lw=1.0, label=f"dissolve 1D (t~{t_diss})")
+    if t_diss2 is not None:
+        plot_c.axvline(t_diss2, color=TAB_RED, ls="-.", lw=1.0, label=f"dissolve 2D (t~{t_diss2})")
     plot_c.set_ylabel("clumped fraction", color=TAB_RED)
     plot_c.tick_params(axis="y", labelcolor=TAB_RED)
     plot_c.set_ylim(0, 1.02)
-    plot_c.set_title("C. Flood metric (red) + dark mass fraction (green): the Bullet observable "
-                     "needs green high WHILE red is high", fontsize=10, loc="left")
+    plot_c.set_title("C. Halo coherence (red: 1D solid, 2D dashed) + dark fraction (green: "
+                     "global solid, in-halo dashed) -- Bullet needs green high WHILE red is high",
+                     fontsize=10, loc="left")
     plot_c.legend(loc="upper right", fontsize=8)
     plot_c.grid(True, alpha=0.3)
     twin_c = plot_c.twinx()
@@ -475,6 +612,43 @@ def main():
     plt.savefig(out, dpi=150, bbox_inches="tight")
     plt.close()
     print(f"\nSaved: {out}")
+
+    # --- figure 2: the 2D maps the metrics were computed from (ground truth) ---
+    from matplotlib.patches import Circle
+    fig2 = plt.figure(figsize=(12.5, 8))
+    gs2 = gridspec.GridSpec(2, 3, hspace=0.30, wspace=0.25)
+    fig2.suptitle(f"2D halo maps — Run {run_id}  (top: dimple + peak disks; "
+                  f"bottom: LENSING gas+dimple, ^ = lensing peak, o = gas peak)",
+                  fontsize=12)
+    for j, (s_real, g2, d2, h2) in enumerate(maps2d):
+        for r, field, cmap in ((0, d2, "magma"), (1, g2 + d2, "viridis")):
+            ax = fig2.add_subplot(gs2[r, j])
+            eps = field.max() * 1e-4 + 1e-30
+            ax.imshow(np.log10(field + eps), origin="lower", cmap=cmap,
+                      interpolation="nearest", aspect="equal")
+            for side in ("LOW", "HIGH"):
+                pr, pc = h2[side]["peak"]
+                if r == 0:
+                    ax.plot(pc, pr, "wx", ms=8, mew=2)
+                    ax.add_patch(Circle((pc, pr), args.halo_radius, fill=False,
+                                        color="white", ls="--", lw=1.0, alpha=0.8))
+                else:
+                    lr, lc = h2[side]["lens_peak"]
+                    gr, gc = h2[side]["gas_peak"]
+                    ax.plot(lc, lr, "^", color="cyan", ms=8, mew=1.5, mfc="none")
+                    ax.plot(gc, gr, "o", color="lime", ms=8, mew=1.5, mfc="none")
+            ax.axvline(mid, color="white", ls=":", lw=0.7, alpha=0.6)
+            if r == 0:
+                ax.set_title(f"{snap_labels[j]}  (dark-in: "
+                             f"L {h2['LOW']['dark_in']:.2f} / H {h2['HIGH']['dark_in']:.2f})",
+                             fontsize=9)
+            ax.set_xlabel("col", fontsize=8)
+            if j == 0:
+                ax.set_ylabel("dimple (log)" if r == 0 else "lensing (log)", fontsize=9)
+    out2 = OUTPUT_DIR / f"dimple_infall2d_run{run_id}.png"
+    plt.savefig(out2, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Saved: {out2}")
 
 
 if __name__ == "__main__":

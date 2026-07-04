@@ -102,7 +102,7 @@ def mass_to_size(mass):
     return np.nan_to_num(sizes, nan=20.0)
 
 
-def draw_panel(ax, df, timestep, vmin, vmax, smax):
+def draw_panel(ax, df, timestep, vmin, vmax):
     ax.set_title(f"timestep {timestep}  ({len(df)} galaxies)")
     ax.set_xlabel("Col")
     ax.set_ylabel("Row")
@@ -169,8 +169,8 @@ def main():
     fig, axes = plt.subplots(1, 2, figsize=(15, 7.5))
     fig.suptitle(f"Galaxy Centroids — Run {run_id}", fontsize=15)
 
-    draw_panel(axes[0], df_early, early, vmin, vmax, None)
-    sc = draw_panel(axes[1], df_late, late, vmin, vmax, None)
+    draw_panel(axes[0], df_early, early, vmin, vmax)
+    sc = draw_panel(axes[1], df_late, late, vmin, vmax)
 
     # Colorbar driven by whichever panel has data.
     mappable = sc

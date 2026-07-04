@@ -1,3 +1,8 @@
+:: To generate code/markdown
+:: Being in Scripts/generate run
+:: py code.py
+:: py db_to_markdown.py 
+
 @echo off
 cls
 
