@@ -281,7 +281,10 @@ impl AppSetting {
                 "bool" => match val.to_lowercase().as_str() {
                     "true" | "1" | "yes" | "y" => Ok(AppValue::Bool(true)),
                     "false" | "0" | "no" | "n" => Ok(AppValue::Bool(false)),
-                    _ => Err(rusqlite::Error::InvalidQuery),
+                    _ => {
+                        println!("Invalid bool setting - key: {}, type: bool, value: {:?}", key, val);
+                        Err(rusqlite::Error::InvalidQuery)
+                    }
                 },
                 "text" => Ok(AppValue::Text(val)),
                 _other => Err(rusqlite::Error::InvalidColumnType(0, dtype.clone(), rusqlite::types::Type::Text)),

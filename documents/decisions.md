@@ -491,9 +491,9 @@ GALAXY_SMBH_MASS_FRACTION_CAP       0.1
 GRAVITY                             6.67430e-11
 GRAVITY_CURVATURE_COUPLING          0.0025
 GRAVITY_DENSITY_COUPLING            0.025
-INF_GRID_DEPTH                      64
-INF_GRID_HEIGHT                     64
-INF_GRID_WIDTH                      64
+INF_GRID_DEPTH                      80
+INF_GRID_HEIGHT                     80
+INF_GRID_WIDTH                      80
 INITIAL_GEOMETRY                    perlin
 LIGHT_SPEED                         3.0e8
 MATTER_EXPANSION_RATE               1e-6

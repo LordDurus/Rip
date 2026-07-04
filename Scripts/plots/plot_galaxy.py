@@ -18,8 +18,8 @@ REPO = find_root()
 DB_PATH = REPO / "data" / "rip_data.db"
 OUTPUT_DIR = REPO / "output"
 
-# Grid is 64^3; centroids live in [0, 64). Fix axes so the two panels share scale.
-GRID_SIZE = 64
+# Grid is 80^3; centroids live in [0, 80). Fix axes so the two panels share scale.
+GRID_SIZE = 80
 
 
 def save_png(path):
