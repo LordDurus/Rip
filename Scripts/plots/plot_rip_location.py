@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -7,7 +8,14 @@ import subprocess
 from pathlib import Path
 from scipy.optimize import curve_fit
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "rip_data.db"
+def find_root(start=None, marker="Cargo.toml"):
+    p = Path(start or __file__).resolve()
+    for d in (p, *p.parents):
+        if (d / marker).exists():
+            return d
+    raise SystemExit(f"repo root not found: no {marker} at or above {p}")
+REPO = find_root()
+DB_PATH = REPO / "data" / "rip_data.db"
 
 def exp_model(t, a, b):
     return a * np.exp(b * t)
@@ -29,6 +37,7 @@ def plot_run(run_id, df):
         plt.plot(time, fit_y, linestyle='--', alpha=0.7)
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     if not DB_PATH.exists():
         print(f"Database not found: {DB_PATH}")
         return

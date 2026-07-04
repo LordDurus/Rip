@@ -17,14 +17,13 @@ import sys
 from pathlib import Path
 
 # ── Locate repo root ──────────────────────────────────────────────────────────
-script_dir = Path(__file__).parent
-repo_root = script_dir
-if not (repo_root / "src").exists():
-    repo_root = script_dir.parent
-if not (repo_root / "src").exists():
-    print("ERROR: cannot find src/ directory. Run from repo root.", file=sys.stderr)
-    sys.exit(1)
-
+def find_root(start=None, marker="Cargo.toml"):
+    p = Path(start or __file__).resolve()
+    for d in (p, *p.parents):
+        if (d / marker).exists():
+            return d
+    raise SystemExit(f"repo root not found: no {marker} at or above {p}")
+repo_root = find_root()
 src = repo_root / "src"
 
 def read(path): return path.read_text(encoding="utf-8")
@@ -48,7 +47,7 @@ raw_tables = re.findall(
     provider_text
 )
 EXCLUDED = {"sqlite_sequence"}
-tables = sorted(set(t for t in raw_tables if t not in EXCLUDED))
+tables = sorted({t for t in raw_tables if t not in EXCLUDED})
 
 # Feature flags — check the file where each feature actually lives
 discover_new_active      = is_active(create_text,  'Galaxy::discover_new')

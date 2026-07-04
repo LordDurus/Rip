@@ -6,7 +6,7 @@
 pub struct Cell {
     /// Unique identifier for this cell in the database
     pub cell_id: i64,
-    /// Foreign key to thec ell_position table
+    /// Foreign key to the cell_position table
     pub cell_position_id: i64,
     /// Simulation timestep at which this cell state was recorded
     pub timestep: usize,

@@ -1,4 +1,5 @@
 import argparse
+import os
 import sqlite3
 import pandas as pd
 import numpy as np
@@ -8,8 +9,15 @@ import shutil
 import subprocess
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "rip_data.db"
-OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
+def find_root(start=None, marker="Cargo.toml"):
+    p = Path(start or __file__).resolve()
+    for d in (p, *p.parents):
+        if (d / marker).exists():
+            return d
+    raise SystemExit(f"repo root not found: no {marker} at or above {p}")
+REPO = find_root()
+DB_PATH = REPO / "data" / "rip_data.db"
+OUTPUT_DIR = REPO / "output"
 
 
 def save_png(path):
@@ -44,12 +52,10 @@ def load_smbh(conn, run_id, timestep):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="SMBH mass distribution and connection-strength relationship.")
-    parser.add_argument("--run-id", type=int, default=None,
-                        help="Run ID to plot (default: most recent completed run)")
-    parser.add_argument("--timestep", type=int, default=None,
-                        help="Timestep to plot (default: final timestep of the run)")
+    print(f"Running: {os.path.basename(__file__)}")
+    parser = argparse.ArgumentParser(description="SMBH mass distribution and connection-strength relationship.")
+    parser.add_argument("--run-id", type=int, default=None, help="Run ID to plot (default: most recent completed run)")
+    parser.add_argument("--timestep", type=int, default=None, help="Timestep to plot (default: final timestep of the run)")
     args = parser.parse_args()
 
     if not DB_PATH.exists():

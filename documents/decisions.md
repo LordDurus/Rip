@@ -95,7 +95,9 @@ for matter needs a physically motivated value.
 
 ## Galaxy Structure & SMBH Competition (galaxies branch)
 
-### One dominant SMBH per galaxy emerges from competition, not enforcement
+<details>
+<summary><b>One dominant SMBH per galaxy emerges from competition, not enforcement</b></summary>
+
 **Decision:** A galaxy has a single SMBH mass budget — a fraction of its baryonic
 mass (total non-SMBH matter inside the galaxy radius). That budget is split among
 all SMBHs in the galaxy in proportion to each one's `smbh_connection_strength`
@@ -125,8 +127,11 @@ own mass. This is the physically motivated denominator and the one that is non-z
 from the first timestep.
 
 ---
+</details>
 
-### The SMBH competition cap denominator must exclude SMBH mass — double-subtraction caused runaway (galaxy-phase2)
+<details>
+<summary><b>The SMBH competition cap denominator must exclude SMBH mass — double-subtraction caused runaway (galaxy-phase2)</b></summary>
+
 **Finding:** The competitive SMBH cap computes a per-galaxy baryonic budget, then
 splits it by connection-strength share. The budget was being computed as
 `total_mass[i] - smbh_mass[i]`. But `find_galaxies` already accumulates `total_mass`
@@ -159,8 +164,11 @@ phantom `apply_gravity_interaction` additive feedback). The cap denominator must
 as the capped quantity grows.
 
 ---
+</details>
 
-### Emergent one-SMBH-per-galaxy via mass-dominance merge — threshold must beat the cap's mass-bunching (galaxy-phase2)
+<details>
+<summary><b>Emergent one-SMBH-per-galaxy via mass-dominance merge — threshold must beat the cap's mass-bunching (galaxy-phase2)</b></summary>
+
 **Goal:** Drive the in-galaxy SMBH population toward ~1 dominant per galaxy (the
 observed regime: ≈1, with rare transient post-merger duals), *emergently* from the
 competition dynamics rather than an enforced "delete all but one" rule.
@@ -174,8 +182,9 @@ while selecting the winner by mass — two different quantities — so comparabl
 strength SMBHs all survived and galaxies kept hundreds.
 
 <details>
-<summary>**The cap/merge interaction — why the threshold value matters.** Pass 3 (the cap)><summary>
-clamps every in-galaxy SMBH toward `baryonic_budget × share`, which *bunches* their
+<summary><b>The cap/merge interaction — why the threshold value matters.</b></summary>
+
+Pass 3 (the cap) clamps every in-galaxy SMBH toward `baryonic_budget × share`, which *bunches* their
 masses together. Pass 4 then only absorbs SMBHs far below the winner. These work
 against each other: the cap makes everyone similar, so a low dominance threshold
 finds nothing to absorb. Measured directly:
@@ -206,8 +215,11 @@ The old `galaxy_smbh_stall_share_threshold` setting is retained but unused; remo
 it if the connection-share criterion is not revived.
 
 ---
+</details>
 
-### Orphan SMBHs are self-limiting, not a runaway — treated as an emergent feature (galaxy-phase2)
+<details>
+<summary><b>Orphan SMBHs are self-limiting, not a runaway — treated as an emergent feature (galaxy-phase2)</b></summary>
+
 **Finding:** Because SMBH formation is exogenous (decoupled from galaxies), ~95% of
 SMBHs form outside any FoF galaxy (`galaxy_id == 0`) and are structurally invisible
 to the competition cap, which only acts on in-galaxy SMBHs. A diagnostic instrument
@@ -242,8 +254,11 @@ formation rather than recomputed against current local curvature). Check whether
 `smbh_connection_strength` updates over time before adding any brake.
 
 ---
+</details>
 
-### Stalled SMBHs merge into the galaxy's dominant hole
+<details>
+<summary><b>Stalled SMBHs merge into the galaxy's dominant hole</b></summary>
+
 **Decision:** An SMBH whose competitive share falls below
 `galaxy_smbh_stall_share_threshold` is merged into its galaxy's most massive SMBH.
 Its mass transfers to the winner; the stalled cell reverts to ordinary matter
@@ -265,8 +280,11 @@ parameter sweep tool can locate the value at which the surviving-SMBH count matc
 the observed one-per-galaxy expectation, rather than that count being hardcoded.
 
 ---
+</details>
 
-### Star formation gated on matter stability (post-inflation only)
+<details>
+<summary><b>Star formation gated on matter stability (post-inflation only)</b></summary>
+
 **Decision:** A cell may only become a star when the previous timestep's
 `|matter_delta|` is below `star_formation_max_matter_delta`. `previous_matter_delta`
 is initialized to infinity so formation is blocked until the first real delta proves
@@ -285,10 +303,13 @@ inflation burst settles, rather than at a hardcoded time.
 the run. Infinity is the correct default — maximally unstable until proven otherwise.
 
 ---
+</details>
 
 ## Implementation
 
-### `apply_gravity_interaction` removed
+<details>
+<summary><b><code>apply_gravity_interaction</code> removed</b></summary>
+
 **Decision:** The function that coupled `matter_density` and `curvature` locally
 each timestep was removed entirely.
 
@@ -299,8 +320,11 @@ monotonically every timestep regardless of physical conditions. It was not repla
 — the FFT solver is the complete gravity implementation.
 
 ---
+</details>
 
-### `RipDecayMechanism::Diffusive` panics by design
+<details>
+<summary><b><code>RipDecayMechanism::Diffusive</code> panics by design</b></summary>
+
 **Decision:** The `Diffusive` variant of `RipDecayMechanism` panics with a clear
 message rather than silently doing nothing.
 
@@ -309,8 +333,11 @@ without any indication that something is unimplemented. A loud failure is prefer
 until the mechanism is actually implemented.
 
 ---
+</details>
 
-### Accretion is local, not mass-conserving
+<details>
+<summary><b>Accretion is local, not mass-conserving</b></summary>
+
 **Decision:** The accretion term adds matter to high-gravity cells without removing
 it from neighbors. Matter is created locally rather than transferred.
 
@@ -320,10 +347,13 @@ that captures the qualitative behavior (over dense regions get denser) without t
 full machinery. Noted as a known limitation in `RESULTS.md`.
 
 ---
+</details>
 
 ## Tuning History
 
-### Why `RIP_DRAIN_RATE = 1.25e-6`
+<details>
+<summary><b>Why <code>RIP_DRAIN_RATE = 1.25e-6</code></b></summary>
+
 Starting from `1e-6` (no turnover in 5000 timesteps) and `1e-3` (matter drained
 to zero by t=3), binary search converged on `1.25e-6` as producing a clean peak
 around t=32 with ~35% of peak matter remaining at t=500 and stable black hole
@@ -331,14 +361,20 @@ count. This is the first value that produced a meaningful turnover suitable for
 the Phase 1 hypothesis test.
 
 ---
+</details>
 
-### Transport gravity-axis pairing: straight
+<details>
+<summary><b>Transport gravity-axis pairing: straight</b></summary>
+
 `(gh, gw, gd) = (gravity_x, gravity_y, gravity_z)`, matching the FFT's array-dimension order
 (dim0→x, dim1→y, dim2→z). The swapped pairing produced diagonal-stripe / stacked-sheet artifacts in
 every field — the transverse-flow signature of a rotated mapping. The *diagonal* (rather than
 axis-aligned) artifact was the tell that it was an x↔y swap in the row–col plane, not a single-axis flip.
+</details>
 
-### Curvature: reverted to the random seed, not gravity-sourced
+<details>
+<summary><b>Curvature: reverted to the random seed, not gravity-sourced</b></summary>
+
 Curvature is left at its `seed_initial_curvature` value (`rng 0.0..0.1`) and is no longer overwritten
 in the loop. Gravity-sourcing it (`curvature = gravity_curvature_coupling · |g|`) drove curvature to
 ~1e-14 — twelve-plus orders below the 0.08 threshold — so nothing could collapse. It also coupled
@@ -350,25 +386,37 @@ transport-independent: ~20% of cells exceed 0.08, and the dense knots among them
   loop. Commenting out the whole block also kills the `gravity_x/y/z` assignments, which zeroes
   transport and accretion (cell.gravity stays 0 → transport's `l1 <= 0` guard fires for every cell →
   smooth, unclumped matter).
+</details>
 
-### Accretion removed
+<details>
+<summary><b>Accretion removed</b></summary>
+
 The in-place `accretion` growth term is gone; transport is its conservative replacement. The non-BH
 branch now only drains: `matter_density -= rip_drain_rate · rip_strength · matter_density`. Clean
 split: **drain removes matter from the universe, transport redistributes what remains.**
+</details>
 
-### rip_drain_rate lowered to 1.25e-8
+<details>
+<summary><b>rip_drain_rate lowered to 1.25e-8</b></summary>
+
 The diffuse drain is a strong, uniform, **one-way** matter sink. At 1.25e-6 it removed essentially
 all matter over a run and single-handedly set a(t), masking the black-hole channel — the only channel
 that has a reversal (contraction) mechanism. Lowering it ~100× demotes the leak to a slow background
 drift (~6%/run) and lets formation/reversal drive a(t). This is the change that made contraction
 visible. It also preserves matter so more of it clusters and collapses instead of leaking away.
+</details>
 
-### transport_rate = 0.025
+<details>
+<summary><b>transport_rate = 0.025</b></summary>
+
 0.05 rammed matter into a few super-dense spikes; 0.025 gives a graded web. Because transport only
 flows downhill (no back-pressure), the rate sets the *timescale* of concentration, not the endpoint —
 pick the rate that catches the transient web you want at the run length you use.
+</details>
 
-### Strategic: not fitting a constant Λ
+<details>
+<summary><b>Strategic: not fitting a constant Λ</b></summary>
+
 Stopped trying to match late-time expansion to a cosmological constant. DESI (2025) reports mounting
 hints that dark energy may be *evolving / weakening* rather than constant, so fitting ΛCDM's constant
 Λ is fitting a target the data no longer clearly endorses. A matter-depletion mechanism is inherently
@@ -376,6 +424,7 @@ dynamical and naturally produces a weakening late-time driver; if/when expansion
 target is the evolving w(z), not a constant. **Branch closed here; pivoting to supermassive black holes.**
 
 ---
+</details>
 
 ## → ideas-to-explore.md
 
@@ -442,9 +491,9 @@ GALAXY_SMBH_MASS_FRACTION_CAP       0.1
 GRAVITY                             6.67430e-11
 GRAVITY_CURVATURE_COUPLING          0.0025
 GRAVITY_DENSITY_COUPLING            0.025
-INF_GRID_DEPTH                      64
-INF_GRID_HEIGHT                     64
-INF_GRID_WIDTH                      64
+INF_GRID_DEPTH                      80
+INF_GRID_HEIGHT                     80
+INF_GRID_WIDTH                      80
 INITIAL_GEOMETRY                    perlin
 LIGHT_SPEED                         3.0e8
 MATTER_EXPANSION_RATE               1e-6
@@ -485,7 +534,9 @@ TRANSPORT_RATE                      0.025
 UNIFORM_DENSITY                     1.0
 ```
 
-### Timeseries — the arc (downsampled every 25 steps)
+<details>
+<summary><b>Timeseries — the arc (downsampled every 25 steps)</b></summary>
+
 ```sql
 SELECT timestep as st, black_hole_count, total_matter, scale_factor
 FROM timestep_summary
@@ -696,8 +747,11 @@ ts    black_hole_count  total_matter      scale_factor
 4975  16484             62068.1677503133	1.24823893755611
 
 ```
+</details>
 
-### Contraction events — the headline evidence
+<details>
+<summary><b>Contraction events — the headline evidence</b></summary>
+
 Every step where a(t) decreased, with the black-hole count and total matter at that step.
 Expectation: at these steps `black_hole_count` is falling (holes reverting) and `total_matter`
 is rising (matter re-injected) — reversal driving the contraction.
@@ -737,8 +791,11 @@ timestep  black_hole_count  total_matter      scale_factor      delta_a
 162	      9629	            237937.964890694	1.04693192519279	-1.55024632952916e-06
 ```
 _(For just the deepest contractions, swap the final line for `ORDER BY delta_a ASC LIMIT 20;`)_
+</details>
 
-### Key numbers
+<details>
+<summary><b>Key numbers</b></summary>
+
 ```sql
 SELECT
   (SELECT MAX(black_hole_count) FROM timestep_summary WHERE run_id=1)                              AS peak_bh,
@@ -753,6 +810,7 @@ peak_bh peak_bh_step matter_first     matter_last       bh_last   a_last
 19792   628	         254876.750173958 61822.6611639176	16478     1.24854542605761
 ```
 ---
+</details>
 
 ## SMBH matter accounting: which side of the rip is the cell on? (smbh-phase1)
 
@@ -871,7 +929,8 @@ that free-fall in the existing FFT potential — particle-mesh (PM).
 
 ---
 
-### Decision 1 — Particles become the dynamical dark-matter variable; the grid `rip_dimple` location is demoted to a per-step diagnostic projection.
+<details>
+<summary><b>Decision 1 — Particles become the dynamical dark-matter variable; the grid <code>rip_dimple</code> location is demoted to a per-step diagnostic projection.</b></summary>
 
 **Decision.** The dark matter's source of truth moves from the grid location `rip_dimple` to a list of
 collisionless particles that carry position, velocity, and mass and free-fall in the FFT potential.
@@ -896,8 +955,10 @@ writes to `rip_dimple` in particle mode, or the lensing/CMB diagnostics stop mea
 they measure.
 
 ---
+</details>
 
-### Decision 2 — Cloud-in-cell (CIC) for both scatter (mass → grid) and gather (gravity → particle).
+<details>
+<summary><b>Decision 2 — Cloud-in-cell (CIC) for both scatter (mass → grid) and gather (gravity → particle).</b></summary>
 
 **Decision.** Use CIC trilinear interpolation symmetrically: deposit each particle's mass across the
 8 surrounding cells on scatter, and interpolate each particle's gravity from the same 8 cells on
@@ -919,8 +980,10 @@ If profiling later shows this is the bottleneck, NGP/NGP (symmetric) is the docu
 CIC is the default because the smoothness is load-bearing for gate 2.
 
 ---
+</details>
 
-### Decision 3 — Dilute the particle `mass` field each step; dilution stays the only sink.
+<details>
+<summary><b>Decision 3 — Dilute the particle <code>mass</code> field each step; dilution stays the only sink.</b></summary>
 
 **Decision.** Apply the existing expansion-dilution `* (a_prev / a_now)^dimple_dilution_exponent`
 (exponent ≈ 3, ρ ∝ a⁻³) directly to each particle's `mass` every step. Do **not** dilute the grid
@@ -942,8 +1005,10 @@ of the thing being capped (particle mass) — no feedback loop, consistent with 
 smell about cap/budget denominators.
 
 ---
+</details>
 
-### Decision 4 — Explicit mode flag; `DIMPLE_TRANSPORT_RATE = 0` in particle mode keeps Tier 1 as a reversible A/B fallback.
+<details>
+<summary><b>Decision 4 — Explicit mode flag; <code>DIMPLE_TRANSPORT_RATE = 0</code> in particle mode keeps Tier 1 as a reversible A/B fallback.</b></summary>
 
 **Decision.** Add an explicit boolean `app_setting` (proposed `USE_DIMPLE_PARTICLES`) selecting the
 dark-matter mode. In particle mode: particles are dynamical, `rip_dimple` is their projection, and
@@ -961,8 +1026,10 @@ inferring the mode from "are there particles?".
 panics on the missing key (fail-loud — intended).
 
 ---
+</details>
 
-### Deposit & spawn rule
+<details>
+<summary><b>Deposit & spawn rule</b></summary>
 
 **Decision.** At each rip site, spawn **one variable-mass particle** carrying
 `mass = dimple_retention * matter_before_rip` — the exact Tier 1 deposit rule, rerouted from
@@ -992,8 +1059,10 @@ merge) guards against count explosion — proposed `MAX_DIMPLE_PARTICLES`; merge
 conserving mass and momentum when exceeded.
 
 ---
+</details>
 
-### Firewall preserved
+<details>
+<summary><b>Firewall preserved</b></summary>
 
 Scattered particle mass sources gravity only — it is added into the Poisson `raw` field
 (`raw = matter_density + scattered_dimple_mass`) but **must never** be added into `total_matter`.
@@ -1003,8 +1072,10 @@ indirectly (gravity → structure → rips) and never enters the expansion arith
 firewall as Tier 1 and it must survive the move to particles.
 
 ---
+</details>
 
-### New `app_settings` (seed in `template.db` + struct + `from_map`)
+<details>
+<summary><b>New <code>app_settings</code> (seed in <code>template.db</code> + struct + <code>from_map</code>)</b></summary>
 
 - `USE_DIMPLE_PARTICLES` (bool) — mode switch (Decision 4).
 - `MAX_DIMPLE_PARTICLES` (int) — count cap / merge trigger (deposit rule).
@@ -1012,8 +1083,10 @@ firewall as Tier 1 and it must survive the move to particles.
   `DIMPLE_TRANSPORT_RATE` (set 0 in PM mode).
 
 ---
+</details>
 
-### Validation gates (do not claim Tier 2 until all three pass)
+<details>
+<summary><b>Validation gates (do not claim Tier 2 until all three pass)</b></summary>
 
 1. **Bounded.** Total particle mass stays bounded — push + scatter conserve it, dilution bounds it
    (the ~15.6k-plateau analogue). No runaway; CIC shot noise under control in the densest cells.
@@ -1028,8 +1101,10 @@ firewall as Tier 1 and it must survive the move to particles.
    track offset over time on a localized colliding pair.
 
 ---
+</details>
 
-### Open sub-decisions parked with gate conditions
+<details>
+<summary><b>Open sub-decisions parked with gate conditions</b></summary>
 
 - **Equal-mass vs variable-mass particles** — variable-mass chosen for the first cut; revisit to
   equal-mass if gate-1 shot noise or grainy halos show relaxation artifacts.
@@ -1045,10 +1120,12 @@ firewall as Tier 1 and it must survive the move to particles.
   reallocate (this overlaps the standing optimization thread).
 
 ---
+</details>
 
 ## Infrastructure & performance
 
-### Index `cell(run_id, timestep)`
+<details>
+<summary><b>Index <code>cell(run_id, timestep)</code></b></summary>
 
 **Decision.** Add `CREATE INDEX IF NOT EXISTS idx_cell_run_timestep ON cell(run_id, timestep);`
 to `template.db` (so it propagates to every `rip_data.db` on a reset run).
@@ -1074,3 +1151,226 @@ regardless of disk. If relocating, move `data/` (the DB benefits from fast stora
 `target/` (build artifacts, multi-GB, no benefit) on the roomy disk; never relocate while a run holds
 the DB open, and never onto a volume too small for the DB to grow into (a SQLite disk-full mid-write
 can corrupt).
+</details>
+
+## Tier 3 — Bullet Cluster (dark-matter collision test) (bullet-cluster-phase1)
+
+The decisive dark-matter test: the one observation where reality shows dark matter
+*offset* from visible matter. Two clusters collide; the collisional gas shocks and
+lags while the collisionless dark matter sails ahead, so the lensing-mass centroid
+leads the X-ray-gas centroid. The Tier 2 dimple particles are already collisionless
+(half the test is built); the work is giving the gas the ability to lag, then staging
+a collision and measuring the offset. This is what would turn the weak global
+dimple/baryon correlation (Tier 2: r ~ 0.13, an interesting-but-unproven prediction)
+into a recognized match — or expose it as a failure.
+
+<details>
+<summary><b>Decision — split into formation (1a) and collision (1b); 1a gates 1b</b></summary>
+
+**Decision.** Phase 1a seeds a SINGLE clump and runs the existing, validated main
+loop with no collision machinery, to answer one prerequisite question: does a seeded
+overdensity virialize into a clean, emergent dimple halo? Only if it does is 1b (the
+collision) meaningful. 1a touches nothing in the physics loop — it is just a new
+`InitialGeometry::BulletCluster` variant (one Gaussian clump at box center) plus its
+two seed params; the halo forms via the normal rip path.
+
+**Reason.** Mirrors the Tier 2 discipline (inert baseline before PM). If a lone clump
+cannot grow a co-located halo, no collision result could be trusted, so building
+collision code first would be building on sand. Keeping 1a to geometry-only means it
+compiles and runs on the validated path with zero regression risk — a cheap, fast gate.
+
+**Consequence.** The emergent-halo requirement is load-bearing and forbids shortcuts:
+the halo must come from rips, never be painted in by hand, or the collision tests a
+hand-drawn blob instead of the mechanism. 1b is unblocked only after 1a passes.
+
+---
+</details>
+
+<details>
+<summary><b>Decision — Phase 1a validated: a seeded clump grows an emergent dimple halo</b></summary>
+
+**Decision.** Phase 1a passes. A single clump (sigma 6, peak 10) at box center on the
+64^3 grid forms a centrally-concentrated emergent dimple halo, co-located with the
+baryons.
+
+**Reason.** The t=0 signature matches the geometry exactly: rips fire where density >
+COLLAPSE_DENSITY_THRESHOLD (1.5), i.e. 10*exp(-r^2/72) > 1.5 -> r < 11.7 cells -> a
+core of ~6,700 cells; the log reported 6,938 dimpled cells at t=0 (vs ~18,800 spread
+everywhere for a perlin field — the localized opposite). The dimple panel shows a
+textbook radial halo; lensing gives r(dimple,baryon) = +0.405 with centroid offset
+0.28 cells — essentially perfect co-location. The moderate r (vs Tier 1's ~0.9) is the
+extended-halo signature seen in the full PM runs: the dimple is broader than the
+baryon, so per-cell correlation is modest even with aligned centroids — correct
+dark-matter behavior, not a defect. (Note: the first 1a run accidentally ran perlin
+because INITIAL_GEOMETRY was not switched in the DB the sim loads; run_setting snapshot
+is the ground truth for what a run actually used.)
+
+**Consequence.** The apparatus is proven: seed a clump, it grows its own halo. This
+also surfaced the phase-1b box constraint below — the halo reaches ~25-cell radius by
+200 steps, which on a finite periodic box collides with the separation needed to stage
+two clumps.
+
+---
+</details>
+
+<details>
+<summary><b>Decision — success metric is the gas-dimple centroid offset, not halo separation</b></summary>
+
+**Decision.** Bullet Cluster success = the centroid offset between the gas
+(matter_density) and the dark-matter dimple along the collision axis, measured per
+clump after closest approach. Halo overlap during the passage is accepted and expected;
+disjoint halos are NOT required.
+
+**Reason.** This is what the real observation is — the measured displacement between the
+lensing-mass centroid and the X-ray-gas centroid — and the actual Bullet Cluster halos
+overlap heavily during collision. Requiring disjoint halos would be a stricter, *less*
+physical test than reality applies, and it is unachievable for virialized (hence
+extended) halos on a finite periodic box: phase 1a showed ~25-cell halo radius, while
+the periodic stall caps usable center separation below half-box, so two virialized
+halos necessarily overlap. The centroid-offset metric is correct independent of grid
+size — it would be the right choice on any box — so it is a fidelity decision, not a
+hardware workaround. The earlier "fully virialized clumps" choice is preserved because
+the metric no longer fights halo extent.
+
+**Consequence.** Phase 1b measures per-clump gas and dimple centroids projected along
+the collision axis (WIDTH) and reports their displacement; success = the dimple centroid
+leads (is ahead of) the gas centroid after the passage, in the direction of travel.
+Clump-membership assignment (which cells/particles belong to which clump when halos
+overlap) becomes a required piece of the measurement — assign by proximity to the two
+tracked cores. The dense ripping cores (r < 12 cells) stay resolvable as two centroids
+even when halo outskirts merge.
+
+---
+</details>
+
+<details>
+<summary><b>Decision — increase the grid from 64^3 to 80^3 for the Bullet Cluster work</b></summary>
+
+**Decision.** Set INF_GRID_WIDTH = INF_GRID_HEIGHT = INF_GRID_DEPTH = 80 (all three
+together, or the grid is non-cube).
+
+**Reason.** The universe is sparse — real clusters have ample empty space between them —
+so the overlap problem is purely a finite-box artifact, not physics. More cells give
+cleaner cores, more room before halos wrap the periodic boundary, and finer resolution
+of the centroid offset. 80^3 is affordable on the current ~900 GB NVMe drive. This is
+orthogonal to the centroid-offset metric: it improves resolution and headroom but does
+not change what is measured.
+
+**Consequence.** Storage and compute scale as N^3: 80^3 is (80/64)^3 = 1.95x the cells
+of 64^3, so a 5000-step run grows from ~134 GB to ~262 GB and per-run wall-clock
+roughly doubles (FFT solve + per-timestep plot scans both ~2x). This spends roughly half
+the remaining drive headroom. Note 80 = 2^4 * 5 is not a power of two; rustfft handles
+it but the factor of 5 is marginally slower than a pure 2^n grid — a candidate cause if
+the gravity solve ever drags.
+
+---
+</details>
+
+<details>
+<summary><b>Decision — disk usage is now the top infrastructure priority</b></summary>
+
+**Decision.** After Bullet Cluster phase 1b lands, the next infrastructure work is the
+parked **delta / change-only cell storage** scheme (see ideas-to-explore.md), promoted
+from "someday" to top of the priority list.
+
+**Reason.** Full per-step cell storage scales as N^3 * steps and is the real wall, not
+drive size. 64^3x5000 is ~134 GB; the 80^3 bump takes a run to ~262 GB; 96^3 under full
+storage is not viable on the current drive. The grid bump just spent half the remaining
+headroom, so the storage rework is now what stands between the project and any further
+resolution increase. Per the parked idea, savings must come from spatial redundancy
+(store snapshots + deltas of changed cells), never temporal downsampling — every-25th-
+timestep loses events (exact SMBH-formation step, contraction-kick timing) and is
+rejected.
+
+**Consequence.** Grid resolution is now coupled to the storage rework: do the
+delta-storage project *before* the next grid increase, so the bigger grid lands on the
+compact path rather than the ~1 TB full-storage path. Plot scripts and the
+`cell(run_id, timestep)` index both assume full rows, so reconstruction (or a
+materialized-timestep view) is part of the scope, with fail-loud verification that a
+reconstructed timestep is bit-identical to full storage.
+</details>
+
+<details>
+<summary><b>Decision — Phase 1b: gas gains momentum (inertia) + thermal pressure for the collision</b></summary>
+
+**Decision.** The gas (matter_density) gets a momentum channel so it can fall together
+and shock/lag at a collision: an in-memory per-cell velocity field (persistent across
+steps, never a Cell column or persisted row — sidesteps the storage wall and the code
+generator), integrated by gravity (v += g*dt, inertia accumulates), advected
+conservatively (CFL-capped, same two-pass gather as apply_matter_transport), with two
+force terms — ram-pressure drag (gas_drag_coefficient, engages above gas_shock_density)
+and THERMAL PRESSURE (gas_sound_speed, accel = -c_s^2 * grad(rho)/rho). It replaces the
+overdamped transport only when gas_momentum_enabled; the validated path is untouched
+when off. The colliding pair is seeded directly (BulletCluster with BULLET_SEPARATION>0);
+the form-one-then-mirror refinement is deferred.
+
+**Reason.** The overdamped transport has no inertia, so it can neither carry a clump
+ballistically into a collision nor produce a lag — the Bullet Cluster needs both. Dimple
+particles are already collisionless (they sail through); the missing half is collisional
+gas. Momentum supplies inertia; ram-pressure drag supplies the lag; thermal pressure is
+required for stability (see next decision). The advection was verified mass-conserving
+and direction-correct in a standalone reimplementation before compiling; the pressure
+term was verified to spread an overdensity outward while conserving mass.
+
+**Consequence.** New settings (all seeded in template.db, default to the inert/validated
+behavior): BULLET_SEPARATION (0=single clump), GAS_MOMENTUM_ENABLED (0=off),
+GAS_DRAG_COEFFICIENT (0=collisionless), GAS_SHOCK_DENSITY, GAS_SOUND_SPEED. The gas
+velocity is Eulerian (per-cell), not full Lagrangian momentum advection — sufficient for
+inertia + lag, but a known approximation; Lagrangian momentum advection is the phase-2
+refinement if it proves lossy.
+
+---
+</details>
+
+<details>
+<summary><b>Decision — thermal pressure is required: momentum gas Jeans-collapses without it</b></summary>
+
+**Decision.** The gas momentum scheme MUST include the thermal-pressure term. A run with
+momentum on and no pressure (gas_sound_speed = 0) is invalid.
+
+**Reason.** The first 5000-step two-clump momentum run (drag/pressure as configured, no
+effective pressure) was stable for ~1250 steps then underwent a textbook gravitational
+(Jeans) collapse: max_dimple 0.93 -> 2.67 -> 17, total_dimple ~1050 -> 4569, matter_density
+to ~1e22 — a slow-then-fast runaway. Each clump implodes on ITSELF (self-gravity with no
+counter-pressure) faster than the two fall together, so the field blows up before any
+collision. Every offset reading past ~t=1500 from that run is noise from an exploded field
+(the t=4999 "SIGNATURE" was an artifact, discarded). Real gas does not collapse to a point
+because pressure resists compression; the term -c_s^2*grad(rho)/rho supplies that, halting
+collapse so each clump settles into a stable hydrostatic halo.
+
+**Consequence.** gas_sound_speed is a tuned parameter found by short runs: too low -> still
+collapses (blowup returns); too high -> clumps disperse without holding together; watch
+max_dimple / total_dimple boundedness as the gate. The pair did seed correctly here (t=0
+dimpled_cells ~14,300 ≈ two cores vs ~8,950 for one), so the geometry is sound; the blocker
+was purely the missing pressure. (Run-config note: this is the same class as the earlier
+perlin/separation mishaps — verify GAS_MOMENTUM_ENABLED and BULLET_SEPARATION via the
+run_setting snapshot, ground truth for what a run used.)
+
+---
+</details>
+
+<details>
+<summary><b>Decision — revisit "gravity sets the collision speed": the box is too small, seed an approach velocity</b></summary>
+
+**Decision (supersedes the earlier conversational intent).** Earlier we intended the two
+clumps to fall together from rest under mutual gravity, with no seeded approach velocity
+("gravity sets the speed"). Revisit this: plan to seed an explicit approach velocity for
+the Bullet Cluster pair, as the proxy for cosmological infall the box cannot represent.
+
+**Reason.** Evidence from the momentum run: with real GRAVITY (6.67e-11) in an 80-cell
+box, the mutual pull between clumps 30 cells apart is negligible — at t=200 the clumps had
+not moved from their seed positions (25/55), while self-gravity collapsed each clump in
+place. Box-limited gravity simply cannot produce a meaningful collision speed: the clumps
+would take tens of thousands of steps to drift together even without collapsing. The real
+Bullet Cluster's ~4700 km/s came from clusters falling together across megaparsecs over
+gigayears — distances/times the 80^3 box cannot hold. So the velocity that cosmological
+infall would have produced must be supplied as an initial condition. This is not a
+departure from the emergent principle; it is the faithful proxy for infall that is
+physically off-grid. The principle held — the box is the limit.
+
+**Consequence.** A seeded approach velocity (a new setting, applied to each clump's gas
+cells toward the box center at phase start) is the likely next addition after pressure is
+tuned. Pressure first (stop the self-collapse), then velocity (make the collision happen
+in a tractable number of steps). Order matters: validate that pressure yields stable
+clumps before adding the approach velocity, so each variable is tested alone.
+</details>

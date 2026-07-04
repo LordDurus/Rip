@@ -2,9 +2,28 @@ use crate::database::app_settings::AppSetting;
 
 #[derive(Debug, Clone)]
 pub enum InitialGeometry {
-    Uniform { density: f64 },
-    GaussianBlobs { count: usize, peak_density: f64, sigma_min: f64, sigma_max: f64 },
-    Perlin { octaves: u32, frequency: f64, amplitude: f64, seed: u32 },
+    Uniform {
+        density: f64,
+    },
+    GaussianBlobs {
+        count: usize,
+        peak_density: f64,
+        sigma_min: f64,
+        sigma_max: f64,
+    },
+    Perlin {
+        octaves: u32,
+        frequency: f64,
+        amplitude: f64,
+        seed: u32,
+    },
+    /// Bullet Cluster test (Tier 3): one Gaussian clump used to grow an emergent
+    /// dimple halo, mirrored into a colliding pair at the collision phase.
+    BulletCluster {
+        sigma: f64,
+        peak_density: f64,
+        separation: usize,
+    },
     Custom, // Reads from custom_density table
 }
 
@@ -15,10 +34,10 @@ impl InitialGeometry {
         match settings.initial_geometry.to_lowercase().as_str() {
             "uniform" => Self::Uniform { density: settings.uniform_density },
             "blobs" | "gaussian_blobs" => Self::GaussianBlobs {
-                count: settings.blob_count,
-                peak_density: settings.blob_peak_density,
-                sigma_min: settings.blob_sigma_min,
-                sigma_max: settings.blob_sigma_max,
+                count: settings.gaussian_blob_count,
+                peak_density: settings.gaussian_blob_peak_density,
+                sigma_min: settings.gaussian_blob_sigma_min,
+                sigma_max: settings.gaussian_blob_sigma_max,
             },
             "perlin" => Self::Perlin {
                 octaves: settings.perlin_octaves,
@@ -26,8 +45,13 @@ impl InitialGeometry {
                 amplitude: settings.perlin_amplitude,
                 seed: settings.perlin_seed,
             },
+            "bullet" | "bullet_cluster" => Self::BulletCluster {
+                sigma: settings.bullet_clump_sigma,
+                peak_density: settings.bullet_clump_peak_density,
+                separation: settings.bullet_separation,
+            },
             "custom" => Self::Custom,
-            other => panic!("Unknown INITIAL_GEOMETRY: '{}'. Expected: uniform, blobs, perlin, custom", other),
+            other => panic!("Unknown INITIAL_GEOMETRY: '{}'. Expected: uniform, blobs, perlin, custom, bullet_cluster", other),
         }
     }
 }

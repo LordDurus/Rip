@@ -14,12 +14,20 @@ Usage:
 """
 import argparse
 import csv
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "rip_data.db"
-OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
+def find_root(start=None, marker="Cargo.toml"):
+    p = Path(start or __file__).resolve()
+    for d in (p, *p.parents):
+        if (d / marker).exists():
+            return d
+    raise SystemExit(f"repo root not found: no {marker} at or above {p}")
+REPO = find_root()
+DB_PATH = REPO / "data" / "rip_data.db"
+OUTPUT_DIR = REPO / "output"
 
 LEVEL_ORDER = {"debug": 0, "info": 1, "warning": 2, "error": 3}
 
@@ -42,6 +50,7 @@ def resolve_run_id(conn, requested):
 
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     ap = argparse.ArgumentParser(description="Export the DB log table to CSV.")
     ap.add_argument("--run-id", type=int, default=None, help="Run to export (default: latest run with log rows)")
     ap.add_argument("--all", action="store_true", help="Export every run instead of a single one")

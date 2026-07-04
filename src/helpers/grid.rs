@@ -4,17 +4,22 @@ use crate::database::entities::cell::Cell;
 use crate::initial_geometry::InitialGeometry;
 use indicatif::ProgressBar;
 use rand::Rng;
+use rand::SeedableRng;
+use rand::rngs::StdRng;
 
 pub fn populate_grid(
     geometry: &InitialGeometry,
     grid: &mut Vec<Vec<Vec<Cell>>>,
     db: &dyn DbProvider, // only used for Custom
+    seed: u64,
 ) -> rusqlite::Result<()> {
     let depth = grid.len();
     let height = if depth > 0 { grid[0].len() } else { 0 };
     let width = if height > 0 { grid[0][0].len() } else { 0 };
 
-    let mut rng = rand::thread_rng();
+    // Deterministic: distinct sub-seed off the master so blob placement is
+    // reproducible without correlating with the curvature/particle streams.
+    let mut rng = StdRng::seed_from_u64(seed ^ 0x6772_6964_5F70_6F70);
 
     match geometry {
         InitialGeometry::Uniform { density } => {
@@ -83,6 +88,45 @@ pub fn populate_grid(
             }
         }
 
+        InitialGeometry::BulletCluster { sigma, peak_density, separation } => {
+            // One Gaussian clump at box center (separation == 0, formation), or a
+            // colliding PAIR offset +/- separation from center along the WIDTH axis
+            // (separation > 0). Only the baryon overdensities are seeded; the dimple
+            // halos are EMERGENT (rips), never painted in.
+            //
+            // AXIS CONVENTION: create_data allocates grid[height][width][depth]
+            // (outer = height, middle = width, inner = depth). The locals named
+            // depth/height/width above are SWAPPED relative to that allocation, so
+            // index explicitly here. Collision axis = WIDTH = the middle index.
+            //
+            // PERIODIC-STALL NOTE: two equal clumps at exactly half-box separation
+            // feel equal pull both ways and never fall together. Keep
+            // separation < n_w/4 so the pair (2*separation apart) stays under the
+            // half-box stall and falls together the short way.
+            let n_h = grid.len();
+            let n_w = if n_h > 0 { grid[0].len() } else { 0 };
+            let n_d = if n_w > 0 { grid[0][0].len() } else { 0 };
+            let (ch, cd) = (n_h as f64 / 2.0, n_d as f64 / 2.0);
+            let cw = n_w as f64 / 2.0;
+            let centers: Vec<f64> = if *separation == 0 { vec![cw] } else { vec![cw - *separation as f64, cw + *separation as f64] };
+            let two_sigma2 = 2.0 * sigma * sigma;
+            for h in 0..n_h {
+                for w in 0..n_w {
+                    for d in 0..n_d {
+                        let dh = h as f64 - ch;
+                        let dd = d as f64 - cd;
+                        let mut sum = 0.0;
+                        for &cwc in &centers {
+                            let dw = w as f64 - cwc;
+                            let r2 = dh * dh + dw * dw + dd * dd;
+                            sum += peak_density * (-r2 / two_sigma2).exp();
+                        }
+                        grid[h][w][d].matter_density = sum;
+                    }
+                }
+            }
+        }
+
         InitialGeometry::Custom => {
             // Default to 0 first
             for layer in grid.iter_mut() {
@@ -105,9 +149,9 @@ pub fn populate_grid(
     return Ok(());
 }
 
-pub fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSetting, db: &mut dyn DbProvider) -> Vec<crate::galaxy::Galaxy> {
+pub fn seed_initial_curvature(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSetting, db: &mut dyn DbProvider, seed: u64) -> Vec<crate::galaxy::Galaxy> {
     let progress_bar: ProgressBar = ProgressBar::new((settings.inf_grid_height * settings.inf_grid_width * settings.inf_grid_depth) as u64);
-    let mut rng = rand::thread_rng();
+    let mut rng = StdRng::seed_from_u64(seed ^ 0x6375_7276_5F73_6565);
 
     // Galaxies are no longer seeded here. They emerge from the density field via
     // friends-of-friends after inflation (see galaxy::find_galaxies). The initial

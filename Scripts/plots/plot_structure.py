@@ -1,4 +1,5 @@
 import argparse
+import os
 import sqlite3
 import pandas as pd
 import numpy as np
@@ -8,8 +9,15 @@ import subprocess
 from pathlib import Path
 from scipy.ndimage import label
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "rip_data.db"
-OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
+def find_root(start=None, marker="Cargo.toml"):
+    p = Path(start or __file__).resolve()
+    for d in (p, *p.parents):
+        if (d / marker).exists():
+            return d
+    raise SystemExit(f"repo root not found: no {marker} at or above {p}")
+REPO = find_root()
+DB_PATH = REPO / "data" / "rip_data.db"
+OUTPUT_DIR = REPO / "output"
 
 
 def save_png(path):
@@ -93,15 +101,13 @@ def project_2d(density):
 
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     parser = argparse.ArgumentParser(description="Filament and void structure analysis.")
     parser.add_argument("--run-id", type=int, default=None)
-    parser.add_argument("--timestep", type=int, default=None,
-                        help="Timestep to analyze (default: matter density peak)")
+    parser.add_argument("--timestep", type=int, default=None, help="Timestep to analyze (default: matter density peak)")
     parser.add_argument("--grid-size", type=int, default=64)
-    parser.add_argument("--filament-percentile", type=float, default=70,
-                        help="Density percentile above which cells are filaments (default: 70)")
-    parser.add_argument("--void-percentile", type=float, default=30,
-                        help="Density percentile below which cells are voids (default: 30)")
+    parser.add_argument("--filament-percentile", type=float, default=70, help="Density percentile above which cells are filaments (default: 70)")
+    parser.add_argument("--void-percentile", type=float, default=30, help="Density percentile below which cells are voids (default: 30)")
     args = parser.parse_args()
 
     if not DB_PATH.exists():

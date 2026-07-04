@@ -1,4 +1,5 @@
 import argparse
+import os
 import sqlite3
 import pandas as pd
 import numpy as np
@@ -7,11 +8,18 @@ import shutil
 import subprocess
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "rip_data.db"
-OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
+def find_root(start=None, marker="Cargo.toml"):
+    p = Path(start or __file__).resolve()
+    for d in (p, *p.parents):
+        if (d / marker).exists():
+            return d
+    raise SystemExit(f"repo root not found: no {marker} at or above {p}")
+REPO = find_root()
+DB_PATH = REPO / "data" / "rip_data.db"
+OUTPUT_DIR = REPO / "output"
 
-# Grid is 64^3; centroids live in [0, 64). Fix axes so the two panels share scale.
-GRID_SIZE = 64
+# Grid is 80^3; centroids live in [0, 80). Fix axes so the two panels share scale.
+GRID_SIZE = 80
 
 
 def save_png(path):
@@ -94,7 +102,7 @@ def mass_to_size(mass):
     return np.nan_to_num(sizes, nan=20.0)
 
 
-def draw_panel(ax, df, timestep, vmin, vmax, smax):
+def draw_panel(ax, df, timestep, vmin, vmax):
     ax.set_title(f"timestep {timestep}  ({len(df)} galaxies)")
     ax.set_xlabel("Col")
     ax.set_ylabel("Row")
@@ -115,6 +123,7 @@ def draw_panel(ax, df, timestep, vmin, vmax, smax):
 
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     parser = argparse.ArgumentParser(
         description="Galaxy centroid map (2D projection), early vs late timestep. "
                     "Marker size = total_mass, color = SMBH count.")
@@ -160,8 +169,8 @@ def main():
     fig, axes = plt.subplots(1, 2, figsize=(15, 7.5))
     fig.suptitle(f"Galaxy Centroids — Run {run_id}", fontsize=15)
 
-    draw_panel(axes[0], df_early, early, vmin, vmax, None)
-    sc = draw_panel(axes[1], df_late, late, vmin, vmax, None)
+    draw_panel(axes[0], df_early, early, vmin, vmax)
+    sc = draw_panel(axes[1], df_late, late, vmin, vmax)
 
     # Colorbar driven by whichever panel has data.
     mappable = sc

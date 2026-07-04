@@ -2,11 +2,13 @@ use crate::database::entities::cell::Cell;
 use crate::database::entities::structure_particle::StructureParticle;
 use crate::helpers::particle::f64::consts::PI;
 use rand::Rng;
+use rand::SeedableRng;
+use rand::rngs::StdRng;
 use rayon::prelude::*;
 use std::f64;
 
-pub fn initialize_particles(positions: &mut Vec<(f64, f64, f64)>, velocities: &mut Vec<(f64, f64, f64)>) {
-    let mut rng = rand::thread_rng();
+pub fn initialize_particles(positions: &mut Vec<(f64, f64, f64)>, velocities: &mut Vec<(f64, f64, f64)>, seed: u64) {
+    let mut rng = StdRng::seed_from_u64(seed ^ 0x7061_7274_5F69_6E69);
     for i in 0..positions.len() {
         let theta = rng.gen_range(0.0..2.0 * PI);
         let phi = rng.gen_range(0.0..PI);
@@ -127,13 +129,22 @@ fn gather_gravity_cic(grid: &[Vec<Vec<Cell>>], i0: usize, i1: usize, fx: f64, j0
     (gx, gy, gz)
 }
 
-/// Birth position (cell center) and velocity (local gravity * scale) for a
-/// dark-matter particle spawned at a rip site. Gravity-derived so nothing is
-/// born at exactly rest; the struct itself is built by the caller so its field
-/// types match the entity exactly.
-pub fn dimple_birth_state(h: usize, w: usize, d: usize, gh: usize, gw: usize, gd: usize, gravity: (f64, f64, f64), birth_velocity_scale: f64) -> ((f64, f64, f64), (f64, f64, f64)) {
+/// Birth position (cell center) and velocity for a dark-matter particle spawned at a
+/// rip site. MOMENTUM CONSERVATION: the dimple is rip-processed matter (its mass is a
+/// fraction of the matter that just left spacetime), so it inherits that matter's bulk
+/// velocity rather than being re-created at rest. `gas_velocity` is the local gas
+/// bulk-velocity in CELL space (advects gas |v|*dt cells); the particle integrator uses
+/// normalized [-1,1] coords, so convert with 2/n per axis. Component i aligns with
+/// gravity_i: x<->height(gh), y<->width(gw), z<->depth(gd) -- the same mapping push and
+/// scatter use. `momentum_scale` is a retained-momentum multiplier (1.0 = full
+/// conservation; below 1.0 only for A/B tests -- 0.0 reproduces the old born-at-rest bug).
+pub fn dimple_birth_state(h: usize, w: usize, d: usize, gh: usize, gw: usize, gd: usize, gas_velocity: (f64, f64, f64), momentum_scale: f64) -> ((f64, f64, f64), (f64, f64, f64)) {
     let pos = cell_center(h, w, d, gh, gw, gd);
-    let vel = (gravity.0 * birth_velocity_scale, gravity.1 * birth_velocity_scale, gravity.2 * birth_velocity_scale);
+    let vel = (
+        gas_velocity.0 * (2.0 / gh as f64) * momentum_scale,
+        gas_velocity.1 * (2.0 / gw as f64) * momentum_scale,
+        gas_velocity.2 * (2.0 / gd as f64) * momentum_scale,
+    );
     (pos, vel)
 }
 
@@ -146,9 +157,9 @@ pub fn push_dimple_particles(particles: &mut [StructureParticle], grid: &Vec<Vec
         let (j0, j1, fy) = cic_axis(p.position_y, gw);
         let (k0, k1, fz) = cic_axis(p.position_z, gd);
         let (gx, gy, gz) = gather_gravity_cic(grid, i0, i1, fx, j0, j1, fy, k0, k1, fz);
-        p.velocity_x += gx * dt;
-        p.velocity_y += gy * dt;
-        p.velocity_z += gz * dt;
+        p.velocity_x += gx * (2.0 / gh as f64) * dt;
+        p.velocity_y += gy * (2.0 / gw as f64) * dt;
+        p.velocity_z += gz * (2.0 / gd as f64) * dt;
         for v in [&mut p.velocity_x, &mut p.velocity_y, &mut p.velocity_z] {
             if !v.is_finite() {
                 *v = 0.0;

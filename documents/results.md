@@ -258,3 +258,27 @@ This converts the earlier high raw SMBH seed count into a realistic galaxy-scale
 - **Orphan SMBHs dominate the raw count.** ~95% of SMBHs form outside any FoF galaxy (in voids and filaments) and are not subject to the in-galaxy competition. They are self-limiting (their growth is tied to local curvature, which is low in drained regions, so they plateau near ~10⁶ rather than running away) but they are not part of the one-per-galaxy result, which governs only the in-galaxy population. Whether orphans should exist at this fraction is an open physical question, documented in `decisions.md`.
 - **Merge target is not physically unique.** The winner is chosen by mass; since the absorbed mass is conserved into it, the choice of winner has no observable consequence (the merged remnant is identical either way), but it means "which SMBH survives" is a bookkeeping convention, not a physical prediction.
 - **No SMBH→structure feedback yet.** The dominant SMBH's mass still does not feed back into the surrounding density field or gravity.
+
+## Gas checkerboard A/B: upwind pressure gradient (bullet-cluster-phase1)
+
+**Question.** Is the odd-even (checkerboard) gas instability the upstream cause of the gas antipode migration (t~900) and the DM halo dissolution (2D t~1425)?
+
+**Setup.** Two 7,000-step runs, byte-identical settings (seed 8, `SMBH_FORMATION_PROBABILITY=0`, `USE_DIMPLE_PARTICLES=1`), single variable: `GAS_PRESSURE_UPWIND` (velocity-signed one-sided pressure gradient vs. original central differences). Settings confirmed in `run_setting` via `dump_run_settings.py` for both runs.
+
+**Result.**
+
+| Metric | upwind = 1 | upwind = 0 (control) |
+|---|---|---|
+| Late matter density map | clean two-clump, bounded residual plaid at low-density outskirts | full checkerboard takeover |
+| Gas antipode migration | none (centroids ~13-16 cells all run) | returns at t~900 (jump to ~35) |
+| 2D halo verdict | SURVIVES to t=6999 (concentration 0.73) | DISSOLVES at t~1425 (concentration 0.17) |
+| Lensing peak vs gas peak | 0.0 / 0.0 (clean, honestly zero) | 8.2 / 72.0 (corner corruption) |
+| Dimple particles at end | 12,067 (still trickling) | 29,507 (frozen at t~3600) |
+| Total dimple at end | 2,140 (rising +4.5% final quarter) | 4,700 (plateaued) |
+| Dark fraction (global / in-halo) | 0.113 / 0.15-0.16 | 0.245 / 0.42-0.43 |
+
+**Verdict.** Causal chain confirmed: checkerboard -> gas antipode migration -> halo dissolution. The central-difference pressure gradient is blind to the 2-cell odd-even mode (grad = 0 exactly at a checkerboard extremum); donor-cell advection sources noise at that wavelength and FFT gravity is Nyquist-blind, so the mode had a source and no sink. The upwind stencil couples adjacent cells and provides the sink.
+
+**Secondary finding.** The previously celebrated "first clean epoch completion" (birth zero at t~3600, 29,507 particles) was substantially artifact-fed: checkerboard density spikes triggered spurious collapse, manufacturing ~2x the dimple mass and exhausting the birth pool early. With clean gas, rip births continue slowly past t=7,000 (genuine collapse as gas condenses, max density 10 -> 53). The control's higher dark fraction (0.245 vs 0.113) is artifact-sourced dimple, not better physics. Epoch-completion criteria must be re-established on clean-gas runs.
+
+**Follow-ups.** (1) Passive infall will not produce a collision: separation 30.0 -> 25.5 cells over 7,000 steps, decelerating (pressure-supported near-equilibrium + periodic-image pull + expansion). Act-three two-phase design needs an initial velocity kick (issue #19). (2) Dark fraction 0.11 vs observed ~0.83 is the standing composition gap. (3) Residual bounded plaid at low-density outskirts is the expected first-order-upwind equilibrium; not growing per stability check.

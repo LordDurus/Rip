@@ -1,4 +1,5 @@
 import argparse
+import os
 import sqlite3
 import pandas as pd
 import numpy as np
@@ -7,8 +8,15 @@ import subprocess
 from pathlib import Path
 import plotly.graph_objects as go
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "rip_data.db"
-OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
+def find_root(start=None, marker="Cargo.toml"):
+    p = Path(start or __file__).resolve()
+    for d in (p, *p.parents):
+        if (d / marker).exists():
+            return d
+    raise SystemExit(f"repo root not found: no {marker} at or above {p}")
+REPO = find_root()
+DB_PATH = REPO / "data" / "rip_data.db"
+OUTPUT_DIR = REPO / "output"
 
 
 def save_png(path):
@@ -46,6 +54,7 @@ def load_cells(conn, run_id, timestep):
 
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     parser = argparse.ArgumentParser(description="3D visualization of simulation structure.")
     parser.add_argument("--run-id", type=int, default=None)
     parser.add_argument("--timestep", type=int, default=None,

@@ -1,6 +1,7 @@
 BLUE_TAB = "tab:blue"
 
 import argparse
+import os
 import sqlite3
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -9,9 +10,15 @@ import shutil
 import subprocess
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "rip_data.db"
-OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
-
+def find_root(start=None, marker="Cargo.toml"):
+    p = Path(start or __file__).resolve()
+    for d in (p, *p.parents):
+        if (d / marker).exists():
+            return d
+    raise SystemExit(f"repo root not found: no {marker} at or above {p}")
+REPO = find_root()
+DB_PATH = REPO / "data" / "rip_data.db"
+OUTPUT_DIR = REPO / "output"
 
 def save_png(path):
     if shutil.which("optipng.exe"):
@@ -24,6 +31,7 @@ def save_png(path):
 
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     parser = argparse.ArgumentParser(description="Plot inflation (scale factor and growth rate) for a simulation run.")
     parser.add_argument("--run-id", type=int, default=None, help="Run ID to plot (default: most recent completed run)")
     args = parser.parse_args()
