@@ -1,8 +1,8 @@
-"""First-pass Bullet-Cluster offset diagnostic.
+"""First-pass Bullet-Cluster offset diagnostic (single-window snapshot).
 
 Reads the gas-vs-dimple offset at the FIRST closest approach of the two
-colliding clumps, found automatically -- so you stop eyeballing which
-timestep is clean. Method:
+colliding clumps within a --max-timestep window, so plot.bat can show the
+collision developing across a staged series of windows. Method:
 
   1. Project non-BH gas (matter_density) onto the collision axis (col),
      summing over row and layer, at each scanned timestep. Aggregation is
@@ -18,6 +18,19 @@ timestep is clean. Method:
      collisionless dark-matter proxy). Gas lagging behind the dimple is the
      Bullet-Cluster signature.
 
+TWO-PHASE RUNS: when the collision is triggered by a delayed velocity kick
+(BULLET_KICK_RIP_RATE > 0), the real collision is at the logged kick
+timestep. Windows that end BEFORE the kick contain only the pre-kick
+gravitational drift, whose separation minimum is NOT the collision -- reading
+it produces a misleading "observable" (gas and dimple coincident, dark
+fraction ~2%) that has nothing to do with the engineered collision. So for a
+two-phase run this script:
+  - reads the "BULLET KICK fired" log line,
+  - SKIPS entirely (prints a one-line notice, no measurement) when the
+    requested --max-timestep precedes the kick, and
+  - anchors the scan at the kick timestep otherwise.
+A t=0-kick or no-kick run has no kick line and behaves exactly as before.
+
 IMPORTANT: the fixed midpoint col-split only tracks the original two clumps
 up to the first crossing. This script deliberately reads at / just before
 first closest approach for exactly that reason; offsets sampled after the
@@ -30,6 +43,8 @@ Examples:
 """
 
 import argparse
+import os
+import re
 import sqlite3
 from pathlib import Path
 
@@ -69,6 +84,36 @@ def resolve_run_id(conn, requested):
     return row[0]
 
 
+def kick_timestep_from_log(conn, run_id):
+    """Return the timestep of the two-phase BULLET KICK, or None.
+
+    Reads the log line create_data emits when the delayed kick fires:
+      't=4760: BULLET KICK fired -- windowed rip rate ...'
+    Returns None for t=0-kick / no-kick runs (no such line). Introspects the
+    log table so a schema rename surfaces as 'no kick line' rather than crash.
+    """
+    tables = [r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")]
+    log_table = None
+    for t in tables:
+        cols = {r[1] for r in conn.execute(f"PRAGMA table_info({t})")}
+        if {"run_id", "message"} <= cols:
+            log_table = t
+            break
+    if log_table is None:
+        return None
+    row = conn.execute(
+        f"SELECT message FROM {log_table} "
+        f"WHERE run_id = ? AND message LIKE '%BULLET KICK fired%' "
+        f"ORDER BY rowid LIMIT 1",
+        (run_id,),
+    ).fetchone()
+    if not row:
+        return None
+    m = re.search(r"t=(\d+): BULLET KICK fired", row[0])
+    return int(m.group(1)) if m else None
+
+
 def n_cols(conn):
     row = conn.execute("SELECT MAX(col) FROM cell_position").fetchone()
     if row is None or row[0] is None:
@@ -76,7 +121,7 @@ def n_cols(conn):
     return int(row[0]) + 1
 
 
-def candidate_timesteps(conn, run_id, max_timestep):
+def candidate_timesteps(conn, run_id, max_timestep, scan_from):
     # timestep_summary has one cheap row per timestep; authoritative list.
     rows = conn.execute(
         "SELECT timestep FROM timestep_summary WHERE run_id = ? ORDER BY timestep",
@@ -85,6 +130,8 @@ def candidate_timesteps(conn, run_id, max_timestep):
     if not rows:
         raise SystemExit(f"No timestep_summary rows for run_id={run_id}.")
     ts = [int(r[0]) for r in rows]
+    if scan_from is not None:
+        ts = [t for t in ts if t >= scan_from]
     if max_timestep is not None:
         ts = [t for t in ts if t <= max_timestep]
     if not ts:
@@ -223,7 +270,7 @@ def fmt(v, nd=2):
     return "n/a" if v is None else f"{v:.{nd}f}"
 
 
-def report(best, coarse, ncol, window, stride):
+def report(best, coarse, ncol, window, stride, anchor_t):
     print()
     print("=" * 64)
     print("FIRST CLOSEST APPROACH")
@@ -231,6 +278,8 @@ def report(best, coarse, ncol, window, stride):
     print(f"grid cols           : {ncol}  (split at col {ncol // 2})")
     print(f"centroid window      : +/-{window} cells around each clump peak")
     print(f"coarse stride        : {stride}")
+    if anchor_t is not None:
+        print(f"scan anchored at     : t>={anchor_t}  (post-kick, from log)")
     print("-" * 64)
     t = best["timestep"]
     print(f"timestep             : {t}")
@@ -268,7 +317,7 @@ def _lag_word(offset):
     return "coincident with"
 
 
-def make_plot(coarse, best, run_id, scan_end):
+def make_plot(coarse, best, run_id, scan_end, anchor_t):
     try:
         import matplotlib
         matplotlib.use("Agg")
@@ -288,6 +337,9 @@ def make_plot(coarse, best, run_id, scan_end):
     ax1.plot(ts, sep, color="steelblue", marker="o", ms=3, lw=1.3)
     ax1.axvline(best["timestep"], color="tomato", ls="--",
                 label=f"first closest approach (t={best['timestep']})")
+    if anchor_t is not None:
+        ax1.axvline(anchor_t, color="purple", ls=":", lw=1.2,
+                    label=f"kick (t={anchor_t})")
     ax1.set_ylabel("|clump separation| (cells)")
     ax1.legend(fontsize=9)
     ax1.grid(True, alpha=0.3)
@@ -298,6 +350,8 @@ def make_plot(coarse, best, run_id, scan_end):
              label="right clump gas-dimple offset")
     ax2.axhline(0, color="gray", lw=0.8)
     ax2.axvline(best["timestep"], color="tomato", ls="--")
+    if anchor_t is not None:
+        ax2.axvline(anchor_t, color="purple", ls=":", lw=1.2)
     ax2.set_xlabel("timestep")
     ax2.set_ylabel("gas - dimple (cells)")
     ax2.legend(fontsize=9)
@@ -314,6 +368,7 @@ def make_plot(coarse, best, run_id, scan_end):
 # ---------------------------------------------------------------------------
 
 def main():
+    print(f"Running: {os.path.basename(__file__)}")
     parser = argparse.ArgumentParser(
         description="Auto-detect the first closest approach and report the "
                     "gas-dimple offset there."
@@ -328,6 +383,9 @@ def main():
                              "each clump peak (default: 8).")
     parser.add_argument("--max-timestep", type=int, default=None,
                         help="Only scan timesteps <= this (default: all).")
+    parser.add_argument("--no-kick-anchor", action="store_true",
+                        help="Ignore the BULLET KICK log line and scan the whole "
+                             "window (pre-two-phase behavior).")
     parser.add_argument("--no-plot", action="store_true",
                         help="Skip writing the diagnostic PNG.")
     args = parser.parse_args()
@@ -339,7 +397,28 @@ def main():
     try:
         run_id = resolve_run_id(conn, args.run_id)
         ncol = n_cols(conn)
-        timesteps = candidate_timesteps(conn, run_id, args.max_timestep)
+
+        # Two-phase anchor. For a two-phase run, a window that ends before the
+        # kick holds only pre-kick drift -- reading its separation minimum
+        # yields a misleading "observable" unrelated to the engineered
+        # collision (this is the t=225-vs-t=4760 bug). So: skip such windows
+        # outright, and anchor the scan at the kick for windows that reach it.
+        anchor_t = None
+        if not args.no_kick_anchor:
+            kt = kick_timestep_from_log(conn, run_id)
+            if kt is not None:
+                if args.max_timestep is not None and args.max_timestep < kt:
+                    print(f"Two-phase run: kick fires at t={kt}, but this window "
+                          f"ends at t={args.max_timestep} (pre-kick).")
+                    print("SKIPPING -- a pre-kick window measures gravitational "
+                          "drift, not the collision. No offset reported for this "
+                          "window (this is expected, not a failure).")
+                    return
+                anchor_t = kt
+                print(f"Two-phase run: anchoring scan at kick timestep t={kt} "
+                      f"(from log).")
+
+        timesteps = candidate_timesteps(conn, run_id, args.max_timestep, anchor_t)
         print(f"Scanning {len(timesteps)} timesteps "
               f"(coarse stride {args.coarse_stride}) on a {ncol}-col axis...")
 
@@ -358,11 +437,11 @@ def main():
     finally:
         conn.close()
 
-    report(best, coarse, ncol, args.window, args.coarse_stride)
+    report(best, coarse, ncol, args.window, args.coarse_stride, anchor_t)
 
     if not args.no_plot:
         scan_end = args.max_timestep if args.max_timestep is not None else coarse[-1]["timestep"]
-        make_plot(coarse, best, run_id, scan_end)
+        make_plot(coarse, best, run_id, scan_end, anchor_t)
 
 
 if __name__ == "__main__":

@@ -98,6 +98,75 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
         return Err(err.into());
     }
 
+    // Bullet Cluster velocity kick. Passive infall never collides (measured:
+    // separation 30.0 -> 25.5 cells over 7,000 steps, decelerating -- pressure
+    // support plus periodic-image pull), and the Bullet observable needs a
+    // supersonic passage, so the collision speed is a physical property of the
+    // scenario: a bulk velocity on each half of the box along the collision
+    // axis (WIDTH), left half +v, right half -v (closing speed 2v, closing
+    // Mach = 2v / GAS_SOUND_SPEED). Do NOT derive this from NUM_TIMESTEPS --
+    // run length follows from the velocity, never the reverse, or runs of
+    // different length simulate different physical systems. Zero disables.
+    //
+    // WHEN the kick fires is governed by BULLET_KICK_RIP_RATE:
+    //   <= 0: kick here at init (byte-identical to all prior kick runs).
+    //   >  0: two-phase experiment. No kick at init; the run evolves kick-free
+    //         until the trailing rip birth rate (births/step over the last
+    //         BULLET_KICK_WINDOW steps) drops below the threshold -- the
+    //         model's own thermometer saying its rip epoch is over (the
+    //         universe is too cold to rip) -- then the kick fires once, in
+    //         the loop. The observed Bullet Cluster is a late-universe event
+    //         between mature clusters; colliding at t=0 forces the encounter
+    //         into the primordial epoch, a scenario mismatch. The threshold
+    //         is detection apparatus, not mechanism: the epoch end is decided
+    //         by the physics, and the offset must still emerge from drag
+    //         during the crossing. Requires USE_DIMPLE_PARTICLES (births are
+    //         the counted event); without particles it never fires and a
+    //         warning is logged at run end.
+    //
+    // Init path kicks gas only (+= on a zero field, so identical to prior
+    // runs; no particles exist at t=0). The delayed path also kicks existing
+    // dimple and structure particles -- by kick time both populations exist
+    // and must ride with their clusters (galaxies travel with the DM in the
+    // observed Bullet). Setting velocity on empty cells is harmless:
+    // apply_gas_momentum zeroes velocity wherever matter_density <= 0.
+    // The kick SPEED comes from bullet_kick_velocity (see that fn): either the
+    // BULLET_INITIAL_VELOCITY setting (mode 0, tuned) or derived from the box's
+    // own mass and separation (mode 1, infall). Mode 1 stays enabled even when
+    // BULLET_INITIAL_VELOCITY is 0 -- the setting is not the source of truth
+    // there, so the enable test must be mode-aware or a derived-velocity run
+    // with the setting left at 0 would silently never kick.
+    let bullet_geometry = app_settings.initial_geometry == "bullet_cluster";
+    let kick_on_rip_rate = app_settings.bullet_kick_rip_rate > 0.0;
+    let kick_enabled = bullet_geometry && (app_settings.bullet_velocity_mode != 0 || app_settings.bullet_initial_velocity != 0.0);
+    if kick_enabled && !kick_on_rip_rate {
+        // t=0 kick: measured on the seeded box (no dimple exists yet, so in
+        // mode 1 the infall mass is gas-only -- correct, that IS the mass at
+        // t=0). The delayed path re-measures at fire time, on the matured box.
+        let kv = bullet_kick_velocity(&grid, &app_settings);
+        let kick = kv.v;
+        let message = format!("t=0: BULLET KICK (init) -- {}", kv.detail);
+        _ = db.log_message(run.run_id, MODULE, LogLevel::Info, &message);
+        let split = app_settings.inf_grid_width / 2;
+        for plane in gas_velocity.iter_mut() {
+            for (w, rowv) in plane.iter_mut().enumerate() {
+                let v_w = if w < split { kick } else { -kick };
+                for v in rowv.iter_mut() {
+                    v[1] += v_w; // v[1] pairs with the width index in apply_gas_momentum
+                }
+            }
+        }
+    }
+
+    // Two-phase kick state: trailing birth-count ring buffer (fixed window as
+    // measurement convention -- a single step's rate is shot noise) and a
+    // one-shot latch. Marked fired when the kick is disabled or already
+    // applied at init so the in-loop check short-circuits.
+    const BULLET_KICK_WINDOW: usize = 100;
+    let mut birth_window = [0usize; BULLET_KICK_WINDOW];
+    let mut birth_window_sum: usize = 0;
+    let mut bullet_kick_fired = !kick_enabled || !kick_on_rip_rate;
+
     // Galaxy overdensity seeding removed: galaxies emerge from the density
     // field via friends-of-friends after inflation, not from init-time stamps.
 
@@ -377,9 +446,67 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
         });
 
         // Tier 2: fold this step's freshly spawned dark-matter particles in.
-        if app_settings.use_dimple_particles {
+        let births_this_step = if app_settings.use_dimple_particles {
             let mut spawned = new_dimple_particles.lock().unwrap();
+            let births = spawned.len();
             dimple_particles.append(&mut spawned);
+            births
+        } else {
+            0
+        };
+
+        // Two-phase Bullet kick trigger (see the init-kick comment for the
+        // design rationale). Update the trailing window every step, then fire
+        // once when the windowed birth rate drops below the threshold: the
+        // rip epoch has ended by the model's own clock, so the merger-ready
+        // collision can begin. Kicks gas plus both particle populations so
+        // the clusters move as wholes (gas gets += so internal motions are
+        // preserved -- this is a boost, not a reset).
+        if !bullet_kick_fired {
+            let slot = timestep % BULLET_KICK_WINDOW;
+            birth_window_sum = birth_window_sum - birth_window[slot] + births_this_step;
+            birth_window[slot] = births_this_step;
+
+            let windowed_rate = birth_window_sum as f64 / BULLET_KICK_WINDOW as f64;
+            if timestep >= BULLET_KICK_WINDOW && windowed_rate < app_settings.bullet_kick_rip_rate {
+                bullet_kick_fired = true;
+                // Velocity is measured HERE, not at init: in mode 1 the infall
+                // mass must be the MATURED box (dimple included), which is the
+                // whole point of the two-phase design -- the dark matter that
+                // makes the offset measurable is also what the clumps must
+                // escape. Measuring at t=0 would use gas-only mass and derive a
+                // velocity for a box that no longer exists.
+                let kv = bullet_kick_velocity(&grid, &app_settings);
+                let kick = kv.v;
+                let split = app_settings.inf_grid_width / 2;
+                let split_f = split as f64;
+                for plane in gas_velocity.iter_mut() {
+                    for (w, rowv) in plane.iter_mut().enumerate() {
+                        let v_w = if w < split { kick } else { -kick };
+                        for v in rowv.iter_mut() {
+                            v[1] += v_w;
+                        }
+                    }
+                }
+                // position_y / velocity_y pair with the width axis (same
+                // convention as gravity_y and gas v[1]).
+                for p in dimple_particles.iter_mut().chain(particles.iter_mut()) {
+                    p.velocity_y += if p.position_y < split_f { kick } else { -kick };
+                }
+                let vmsg = format!("t={}: BULLET KICK velocity -- {}", timestep, kv.detail);
+                _ = db.log_message(run_id, MODULE, LogLevel::Info, &vmsg);
+                let message = format!(
+                    "t={}: BULLET KICK fired -- windowed rip rate {:.4}/step < threshold {:.4} (window {} steps); kicked gas + {} dimple + {} structure particles at +/-{:.2}",
+                    timestep,
+                    windowed_rate,
+                    app_settings.bullet_kick_rip_rate,
+                    BULLET_KICK_WINDOW,
+                    dimple_particles.len(),
+                    particles.len(),
+                    kick
+                );
+                _ = db.log_message(run_id, MODULE, LogLevel::Info, &message);
+            }
         }
 
         // Compute gravity for all cells at once via FFT
@@ -491,6 +618,38 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
         scale_factor = scale_factor * f64::exp(matter_delta * app_settings.matter_expansion_rate);
         if scale_factor.is_nan() || scale_factor.is_infinite() {
             panic!("scale_factor non-finite at timestep {}: {} (matter_delta {})", timestep, scale_factor, matter_delta);
+        }
+
+        if app_settings.gas_momentum_enabled {
+            // Bullet Cluster: gas carries momentum (inertia) and shocks/lags via
+            // ram-pressure drag. Replaces the overdamped transport in this mode.
+            apply_gas_momentum(&mut grid, &mut gas_velocity, &app_settings, STEP_DURATION);
+
+            // Bulk-momentum diagnostic: mass-weighted mean v_w per half-box.
+            // At t=0 this must read ~+kick / -kick. Decay curve shape is the
+            // tell: instant drop = clamp/zeroing bug; gradual decay = real
+            // momentum sink (drag, rip removal, advection leak). Only
+            // meaningful pre-contact (~t<100) -- after the clumps cross the
+            // midline the per-half accounting mixes them.
+            let split = app_settings.inf_grid_width / 2;
+            let (mut m, mut p) = ([0.0f64; 2], [0.0f64; 2]);
+            for (h, plane) in grid.iter().enumerate() {
+                for (w, row) in plane.iter().enumerate() {
+                    let side = if w < split { 0 } else { 1 };
+                    for (d, cell) in row.iter().enumerate() {
+                        if !cell.is_black_hole {
+                            m[side] += cell.matter_density;
+                            p[side] += cell.matter_density * gas_velocity[h][w][d][1];
+                        }
+                    }
+                }
+            }
+            let bulk_l = if m[0] > 0.0 { p[0] / m[0] } else { 0.0 };
+            let bulk_r = if m[1] > 0.0 { p[1] / m[1] } else { 0.0 };
+            let message = format!("t={}: bulk_vel_w L={:.4}, R={:.4}", timestep, bulk_l, bulk_r);
+            _ = db.log_message(run.run_id, MODULE, LogLevel::Info, &message);
+        } else {
+            apply_matter_transport(&mut grid, &app_settings, STEP_DURATION);
         }
 
         previous_total_matter = current_total_matter;
@@ -636,10 +795,18 @@ pub fn run(app_settings: &AppSetting, db: &mut dyn DbProvider) -> Result<(), Box
             .expect("failed to record rip field summary");
     }
 
-    let count = grid.iter().flat_map(|col| col.iter()).flat_map(|row| row.iter()).filter(|cell| cell.is_black_hole).count();
-
     progress_bar.finish_with_message("Inflation simulation complete.");
-    println!("Run {} complete. Black holes created: {}", run.run_id, count);
+    // Two-phase kick post-mortem: a threshold that never fires means the rip
+    // epoch never cooled below it within this run -- the collision never
+    // happened. Loud in the log so a morning-after read of a kick-less run
+    // is a one-liner, not a hunt.
+    if !bullet_kick_fired {
+        let message = format!(
+            "BULLET KICK never fired: windowed rip rate never dropped below {:.4}/step within {} steps (requires USE_DIMPLE_PARTICLES=1 to count births)",
+            app_settings.bullet_kick_rip_rate, app_settings.num_timesteps
+        );
+        _ = db.log_message(run.run_id, MODULE, LogLevel::Info, &message); // Info not Warning: only Info/Error variants verified in this file
+    }
 
     if let Err(err) = db.complete_run(run.run_id) {
         let message = format!("failed to complete run: {err}");
@@ -671,4 +838,217 @@ fn cell_uniform(seed: u64, timestep: usize, h: usize, w: usize, d: usize, draw: 
     s = splitmix64(s ^ (d as u64).wrapping_mul(0x100000001B3));
     s = splitmix64(s ^ draw);
     (s >> 11) as f64 / ((1u64 << 53) as f64)
+}
+
+/// Per-clump kick speed for the Bullet collision, plus the inputs that produced
+/// it (the caller logs `detail` so the number is auditable, never a black box).
+struct BulletKickVelocity {
+    v: f64,
+    detail: String,
+}
+
+/// Decide the Bullet kick speed. Each clump gets +/- this along WIDTH, so the
+/// closing speed is 2v.
+///
+/// BULLET_VELOCITY_MODE:
+///   0 = setting -- use BULLET_INITIAL_VELOCITY verbatim. A TUNED free
+///       parameter: v=10 was found empirically because v=7 left the clumps
+///       bound. Honest, but fitted to the outcome.
+///   1 = infall  -- DERIVE v from the box's own mass and separation, so the
+///       collision speed is a consequence of the physics rather than a dial.
+///   2 = gravity -- not implemented (start the clumps at rest and let gravity
+///       do the accelerating). Needs a bigger box: in 80^3 the periodic images
+///       fight the attraction and there is no room to reach supersonic.
+///
+/// MODE 1 PHYSICS. Two bodies falling from rest at separation r_start reach,
+/// at separation r_contact, a relative speed set by energy conservation:
+///
+///     v_rel^2 = 2 G M (1/r_contact - 1/r_start)
+///
+/// with M the total gravitating mass. Each clump carries half the closing
+/// speed, so the per-side kick is v_rel / 2, then scaled by
+/// BULLET_VELOCITY_MULTIPLIER (default 1.0 = no effect; a knob to reach for
+/// deliberately, not a hidden fudge).
+///
+/// Two things make this NOT a naive plug-in of the formula, and both were
+/// found by reading gravity.rs rather than assuming:
+///
+/// (a) EFFECTIVE G. compute_gravity_fft uses the raw integer mode index as the
+///     wavenumber (get_wave_number returns i, not 2*pi*i/N). Solving
+///     phi_k = -4*pi*G*rho_k/|m|^2 and g_k = -i*m*phi_k, then matching against
+///     a physically normalized solve (k = 2*pi*m/N, cell spacing 1) gives
+///
+///         G_eff = 2*pi*G / N
+///
+///     i.e. the gravity the sim actually applies is that of G_eff, not of
+///     app_settings.gravity. At N=80 that is ~0.0785*G -- about 12.7x smaller.
+///     Since v ~ sqrt(G), using the raw setting would overstate the infall
+///     speed by ~3.6x. This is not a bug in the solver (it is a self-consistent
+///     rescaling absorbed into whatever `gravity` was tuned to) but it is fatal
+///     to any velocity derived analytically instead of by the solver.
+///     The rescaling is only clean on a CUBIC grid; on a non-cubic grid the
+///     sim's k^2 is not proportional to the true k^2 at all, so we log a
+///     warning and fall back rather than quietly produce a wrong number.
+///
+/// (b) ONLY CONTRAST GRAVITATES. The solver zeroes the k=0 mode (Jeans
+///     swindle), so the mean density exerts no force: what pulls the clumps
+///     together is each clump's EXCESS over the box mean, not its total mass.
+///     Note that summing (rho - rho_mean) over half-boxes is degenerate -- it
+///     sums to zero over the whole box -- so M is the sum of the POSITIVE
+///     excess only (cells above the mean), which is the overdense material that
+///     actually attracts. rho is (matter_density + rip_dimple): exactly the
+///     source term the Poisson solver is handed, so M and G are the same
+///     accounting the gravity obeys.
+///
+/// r_start and r_contact are MEASURED from the grid (excess-weighted centroids
+/// and RMS radii per half-box) rather than read from the seeding settings, so
+/// the value is right whether the clumps were Gaussian-seeded or drifted before
+/// the kick fired. r_contact = sigma_left + sigma_right (cores meeting) is a
+/// modeling choice and the most sensitive input, since it sets the 1/r blow-up:
+/// change it HERE, deliberately, rather than by tuning v.
+///
+/// HONEST LIMITS. This is an idealized two-body number, not the true infall
+/// this periodic box would produce: periodic images pull each clump BACKWARD
+/// (real infall is weaker, so the derived v is an upper bound on gravity's own
+/// answer), and expansion works against the approach and is not in the formula.
+/// Mode 1 removes the TUNING, not the idealization. If the derived v leaves the
+/// clumps bound, that is a REAL FINDING -- gravity from this separation cannot
+/// unbind them in this box -- and it is the argument for mode 2 plus a bigger
+/// box, not a reason to reach for the multiplier.
+fn bullet_kick_velocity(grid: &[Vec<Vec<Cell>>], app_settings: &AppSetting) -> BulletKickVelocity {
+    let mult = app_settings.bullet_velocity_multiplier;
+    let setting_v = app_settings.bullet_initial_velocity;
+
+    // Fallback used whenever mode 1 cannot measure the box: return the setting
+    // and say so loudly, so a silent wrong number is impossible.
+    let fallback = |why: &str| BulletKickVelocity {
+        v: setting_v * mult,
+        detail: format!(
+            "mode=1 (infall) FELL BACK to BULLET_INITIAL_VELOCITY {:.4} x mult {:.4} = {:.4} -- {}",
+            setting_v,
+            mult,
+            setting_v * mult,
+            why
+        ),
+    };
+
+    match app_settings.bullet_velocity_mode {
+        0 => {
+            return BulletKickVelocity {
+                v: setting_v * mult,
+                detail: format!(
+                    "mode=0 (setting): v = BULLET_INITIAL_VELOCITY {:.4} x mult {:.4} = {:.4} [TUNED free parameter]",
+                    setting_v,
+                    mult,
+                    setting_v * mult
+                ),
+            };
+        }
+        2 => {
+            unimplemented!(
+                "BULLET_VELOCITY_MODE=2 (gravity): start the clumps at rest and let gravity accelerate them. Needs a larger box -- in 80^3 the periodic images fight the attraction and there is no room to reach supersonic before contact. Use mode 1 (infall) until then."
+            );
+        }
+        1 => {}
+        other => {
+            panic!("BULLET_VELOCITY_MODE={} is not a valid mode (0=setting, 1=infall, 2=gravity)", other);
+        }
+    }
+
+    let h_dim = app_settings.inf_grid_height;
+    let w_dim = app_settings.inf_grid_width;
+    let d_dim = app_settings.inf_grid_depth;
+
+    // The G_eff rescaling above is only valid on a cubic grid; bail loudly
+    // rather than emit a number that is quietly wrong.
+    if h_dim != w_dim || w_dim != d_dim {
+        return fallback("grid is not cubic, so the FFT wavenumber rescaling (G_eff = 2*pi*G/N) does not hold");
+    }
+    let n_linear = w_dim as f64;
+    let g_eff = 2.0 * std::f64::consts::PI * app_settings.gravity / n_linear;
+
+    // Box mean of the Poisson source (non-BH cells only -- BH cells carry the
+    // 1e30 sentinel and are excluded from every field sum).
+    let mut sum_rho = 0.0f64;
+    let mut n_cells = 0usize;
+    for plane in grid.iter().take(h_dim) {
+        for row in plane.iter().take(w_dim) {
+            for cell in row.iter().take(d_dim) {
+                if cell.is_black_hole {
+                    continue;
+                }
+                sum_rho += cell.matter_density + cell.rip_dimple;
+                n_cells += 1;
+            }
+        }
+    }
+    if n_cells == 0 {
+        return fallback("no non-BH cells to measure");
+    }
+    let rho_mean = sum_rho / n_cells as f64;
+
+    // Per side of the WIDTH midline: positive-excess mass, excess-weighted
+    // centroid, and excess-weighted RMS radius along the collision axis.
+    let split = w_dim / 2;
+    let mut m = [0.0f64; 2];
+    let mut s_w = [0.0f64; 2];
+    let mut s_ww = [0.0f64; 2];
+    for plane in grid.iter().take(h_dim) {
+        for (w, row) in plane.iter().enumerate().take(w_dim) {
+            let side = if w < split { 0usize } else { 1usize };
+            let wf = w as f64;
+            for cell in row.iter().take(d_dim) {
+                if cell.is_black_hole {
+                    continue;
+                }
+                let excess = (cell.matter_density + cell.rip_dimple) - rho_mean;
+                if excess <= 0.0 {
+                    continue; // only overdense material attracts (Jeans swindle)
+                }
+                m[side] += excess;
+                s_w[side] += excess * wf;
+                s_ww[side] += excess * wf * wf;
+            }
+        }
+    }
+    if m[0] <= 0.0 || m[1] <= 0.0 {
+        return fallback("one or both halves have no overdense material -- no two-clump geometry to fall together");
+    }
+
+    let c_lo = s_w[0] / m[0];
+    let c_hi = s_w[1] / m[1];
+    let sig_lo = (s_ww[0] / m[0] - c_lo * c_lo).max(0.0).sqrt();
+    let sig_hi = (s_ww[1] / m[1] - c_hi * c_hi).max(0.0).sqrt();
+
+    let r_start = (c_hi - c_lo).abs();
+    // Cores meeting. Floored at one cell: as r_contact -> 0 the 1/r term blows
+    // up, and sub-cell separations are meaningless on this grid anyway.
+    let r_contact = (sig_lo + sig_hi).max(1.0);
+    if r_start <= r_contact {
+        return fallback(&format!("clumps already overlap (r_start {:.2} <= r_contact {:.2}) -- nothing left to fall", r_start, r_contact));
+    }
+
+    let m_total = m[0] + m[1];
+    let v_rel = (2.0 * g_eff * m_total * (1.0 / r_contact - 1.0 / r_start)).max(0.0).sqrt();
+    let v = 0.5 * v_rel * mult;
+
+    BulletKickVelocity {
+        v,
+        detail: format!(
+            "mode=1 (infall): v = {:.4} [DERIVED] -- M_excess={:.4e} (lo {:.4e} + hi {:.4e}), r_start={:.2}, r_contact={:.2} (sig {:.2}+{:.2}), G={:.4e}, G_eff=2pi*G/N={:.4e}, v_rel={:.4}, mult={:.4}; setting would have given {:.4}",
+            v,
+            m_total,
+            m[0],
+            m[1],
+            r_start,
+            r_contact,
+            sig_lo,
+            sig_hi,
+            app_settings.gravity,
+            g_eff,
+            v_rel,
+            mult,
+            setting_v * mult
+        ),
+    }
 }

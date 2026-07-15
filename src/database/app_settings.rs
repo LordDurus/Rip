@@ -25,9 +25,25 @@ pub struct AppSetting {
     pub bullet_clump_peak_density: f64,
     /// Gaussian spread (std dev, in cell units) of each bullet-cluster clump.
     pub bullet_clump_sigma: f64,
+    /// Bulk collision speed per clump along the width axis for bullet_cluster geometry (left
+    /// +v, right -v; closing speed 2v, closing Mach = 2v/GAS_SOUND_SPEED). 0 disables the kick.
+    /// Steps to contact ~ separation/(2v*dt). Do not scale to NUM_TIMESTEPS.
+    pub bullet_initial_velocity: f64,
+    /// Two-phase Bullet trigger: births/step threshold. 0 = kick at init (prior behavior). >0 =
+    /// no init kick; fire once when trailing 100-step rip birth rate drops below this -- the
+    /// epoch ends by the model's own clock. Requires USE_DIMPLE_PARTICLES=1.
+    pub bullet_kick_rip_rate: f64,
     /// Half-offset (cells) of each Bullet Cluster clump from box center along WIDTH. 0 = single
     /// clump at center (formation); >0 = a colliding pair at center +/- this.
     pub bullet_separation: usize,
+    /// Source of the Bullet kick speed. 0 = BULLET_INITIAL_VELOCITY verbatim (tuned). 1 =
+    /// infall, derived from measured clump mass and separation via v_rel^2 =
+    /// 2*G_eff*M*(1/r_contact - 1/r_start). 2 = full gravitational infall (not implemented;
+    /// needs a bigger box).
+    pub bullet_velocity_mode: usize,
+    /// Scales the kick speed from any mode. Default 1.0 = no effect. A deliberate knob, not a
+    /// hidden fudge.
+    pub bullet_velocity_multiplier: f64,
     /// Minimum density required to trigger collapse mechanisms.
     pub collapse_density_threshold: f64,
     /// Minimum curvature required to trigger collapse mechanisms.
@@ -103,6 +119,9 @@ pub struct AppSetting {
     /// Ram-pressure drag strength. 0 = collisionless gas (passes through like dark matter -> no
     /// offset); >0 = gas shocks and lags at the collision interface.
     pub gas_drag_coefficient: f64,
+    /// Carry gas momentum with advected mass in apply_gas_momentum (Pass 4, v = p/ρ recovery).
+    /// false = original Eulerian velocity (kicked clumps stall).
+    pub gas_momentum_advection: bool,
     /// Master switch for the gas momentum channel. Off = validated over damped transport
     /// (apply_matter_transport); on = apply_gas_momentum (inertia + drag).
     pub gas_momentum_enabled: bool,
@@ -362,7 +381,11 @@ impl AppSetting {
             bh_drain_rate: get_f64("BH_DRAIN_RATE"),
             bullet_clump_peak_density: get_f64("BULLET_CLUMP_PEAK_DENSITY"),
             bullet_clump_sigma: get_f64("BULLET_CLUMP_SIGMA"),
+            bullet_initial_velocity: get_f64("BULLET_INITIAL_VELOCITY"),
+            bullet_kick_rip_rate: get_f64("BULLET_KICK_RIP_RATE"),
             bullet_separation: get_usize("BULLET_SEPARATION"),
+            bullet_velocity_mode: get_usize("BULLET_VELOCITY_MODE"),
+            bullet_velocity_multiplier: get_f64("BULLET_VELOCITY_MULTIPLIER"),
             collapse_density_threshold: get_f64("COLLAPSE_DENSITY_THRESHOLD"),
             curvature_threshold: get_f64("CURVATURE_THRESHOLD"),
             dark_gravity_boost: get_f64("DARK_GRAVITY_BOOST"),
@@ -390,6 +413,7 @@ impl AppSetting {
             galaxy_smbh_mass_fraction_cap: get_f64("GALAXY_SMBH_MASS_FRACTION_CAP"),
             galaxy_smbh_stall_share_threshold: get_f64("GALAXY_SMBH_STALL_SHARE_THRESHOLD"),
             gas_drag_coefficient: get_f64("GAS_DRAG_COEFFICIENT"),
+            gas_momentum_advection: get_bool("GAS_MOMENTUM_ADVECTION"),
             gas_momentum_enabled: get_bool("GAS_MOMENTUM_ENABLED"),
             gas_pressure_enabled: get_bool("GAS_PRESSURE_ENABLED"),
             gas_pressure_upwind: get_bool("GAS_PRESSURE_UPWIND"),

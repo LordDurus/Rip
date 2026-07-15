@@ -1,4 +1,5 @@
 {
+	"window.title": "Rip",
 	"files.associations": {
 		"*.sql": "sqlite"
 	},

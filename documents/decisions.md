@@ -1374,3 +1374,92 @@ tuned. Pressure first (stop the self-collapse), then velocity (make the collisio
 in a tractable number of steps). Order matters: validate that pressure yields stable
 clumps before adding the approach velocity, so each variable is tested alone.
 </details>
+
+## Bullet collision: velocity unbinding and the sweep-then-10k workflow
+
+<details>
+<summary>Collision velocity must be supersonic (v >= 6, ~Mach 3+ at contact) for the clumps to unbind and separate after the pass</summary>
+
+**Decision.** The Bullet collision experiment uses a kick velocity of at least
+6 cells/time (`BULLET_INITIAL_VELOCITY >= 6`), not the 3.0 used in the runs that
+first demonstrated the two-phase machinery.
+
+**Reason.** A four-value velocity sweep (v = 3, 6, 9, 12; t=0 kick; 1500 steps
+each) measured the post-pass re-separation crest for each velocity:
+
+| v | crest separation | crest timestep | outcome |
+|---|---|---|---|
+| 3 | 15.0 cells | 1497 (run end) | bound -- stuck at the box-size wall |
+| 6 | 37.5 cells | 1479 | clean, mid-run |
+| 9 | 38.4 cells | 637 | clean, mid-run |
+| 12 | 37.8 cells | 926 | clean, mid-run |
+
+At v = 3 the clumps stay gravitationally bound: they collide, fail to escape
+each other, and rattle in place, so the "crest" is just where the run ran out
+of steps (the box-size warning fired correctly -- at this velocity a bigger box
+would not help, more velocity would). At v >= 6 the clumps genuinely fly apart
+and re-separate to ~37-38 cells (nearly the full 80-cell box) with the crest
+landing mid-run. The unbinding threshold sits between v = 3 and v = 6, i.e. the
+collision must be supersonic at contact (c_s = 2.0; after drag decay, launch
+v = 6 lands roughly Mach 3 at the pass).
+
+**Consequence.** This is a falsifiable, velocity-thresholded prediction of the
+model, confirmed by the sweep: no Bullet morphology forms below the unbinding
+velocity, because a subsonic encounter is a bound encounter. It also means the
+box was never the limiting factor we suspected during the v = 3 runs -- the
+collision was too slow, not the box too small. The grid stays at 80^3.
+</details>
+
+<details>
+<summary>t=0-kick sweeps select the velocity; only a matured-epoch two-phase run measures the offset magnitude</summary>
+
+**Decision.** Velocity sweeps run in t=0-kick mode (`BULLET_KICK_RIP_RATE = 0`,
+short runs) and are used ONLY to choose a collision velocity by its separation
+dynamics. The gas-dimple offset magnitude is measured separately, in a single
+long two-phase run at the chosen velocity.
+
+**Reason.** In the same sweep, the offset numbers were erratic and
+non-monotonic -- v = 6 read left offset -31 cells, v = 9 read -0.4, v = 12 read
+-22 -- and grossly asymmetric between the two clumps (e.g. -31 vs -1). That is
+not a physical trend; it is noise. The cause is epoch immaturity: a t=0 kick
+collides the clumps in the first few hundred steps, long before the rip epoch
+has built a substantial dimple field, so the collision-time dark fraction is
+only ~5-10% and the per-side "dimple centroid" is dominated by a few noisy
+cells rather than a real dark-matter halo. Extending the run length does not
+fix this, because the collision still happens early regardless of total steps.
+A stable, roughly symmetric offset requires a thick dimple field, which only
+exists after the epoch matures -- i.e. after a two-phase kick that fires once
+the rip rate has cooled (the runs that reached 0.46/0.67 in-halo dark fraction).
+
+**Consequence.** Two knobs are now understood and separated: velocity unbinds
+the clumps (sweep-selected), epoch maturity thickens the dimple (two-phase run).
+The clean offset measurement is the run that combines them -- a two-phase kick
+at v >= 6 -- not a cheap short run. Asymmetry between the two clumps' offsets is
+adopted as a diagnostic tell that the dimple field is too thin to trust the
+measurement.
+</details>
+
+<details>
+<summary>Workflow: cheap short sweep scouts the velocity, one expensive 10k run measures it</summary>
+
+**Decision.** To pick the velocity for a disk-expensive 10k two-phase run,
+first run a small t=0 sweep over a few candidate velocities at short length
+(e.g. v = 6, 7, 8 at ~1500 steps), then commit the single 10k run to the
+selected value.
+
+**Reason.** Disk is the binding constraint. A short 3-value sweep costs a small
+fraction of one 10k run, and choosing a velocity only requires seeing each
+clump complete its first pass and begin re-separating cleanly (~600-800 steps
+at these speeds) -- it does not require the long post-pass tail that only the
+real measurement run needs. Selection criterion: the highest velocity whose
+post-pass crest is large and clean AND that keeps the clumps inside the box
+over 10k steps. High velocity is not automatically better -- over a long run a
+too-fast clump can cross the periodic boundary and wrap, which corrupts the
+separation measurement. The trajectory panel is checked for wrap-around (a
+centroid jumping from high col back to low col) as a disqualifier.
+
+**Consequence.** The lower end of the supersonic range (nearer v = 6) is
+favored for the long run: it separates cleanly (37.5 cells in the sweep) while
+leaving margin against boundary wrap over 10k steps. The 10k run is spent once,
+on a velocity already known to behave.
+</details>

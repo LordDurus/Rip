@@ -197,11 +197,15 @@ pub fn apply_dimple_transport(grid: &mut Vec<Vec<Vec<Cell>>>, settings: &AppSett
 ///      stays with the source (gas does not enter black holes), so total matter is
 ///      conserved among non-BH cells.
 ///
-/// NOTE: the velocity field is Eulerian (per-cell, gravity-integrated with inertia),
-/// not full Lagrangian momentum advection — the gas gains inertia and a drag lag,
-/// which is what the Bullet Cluster offset needs, but velocity is not itself carried
-/// with the advected parcel. If that approximation proves too lossy, momentum
-/// advection is the phase-2 refinement.
+/// NOTE: by default the velocity field is Eulerian (per-cell, gravity-integrated
+/// with inertia) — velocity is NOT carried with the advected parcel. Tolerable
+/// for slow gravity-driven drift, fatal for a ballistic bullet crossing: kick a
+/// clump and mass flows into cells ahead of the front that still have v = 0
+/// while the momentum stays behind in the launch cells — the clump smears and
+/// stalls within a few cells. GAS_MOMENTUM_ADVECTION adds stage 4: ship rho*v
+/// through the same donor-cell mass fluxes and recover v = p/rho, carrying
+/// momentum with the parcel. false leaves gas_velocity untouched after stage 1,
+/// byte-identical to the pre-advection scheme.
 pub fn apply_gas_momentum(grid: &mut Vec<Vec<Vec<Cell>>>, gas_velocity: &mut Vec<Vec<Vec<[f64; 3]>>>, settings: &AppSetting, step_duration: f64) {
     let dt = step_duration;
     let (h_dim, w_dim, d_dim) = (settings.inf_grid_height, settings.inf_grid_width, settings.inf_grid_depth);
@@ -210,6 +214,7 @@ pub fn apply_gas_momentum(grid: &mut Vec<Vec<Vec<Cell>>>, gas_velocity: &mut Vec
     let cs = settings.gas_sound_speed;
     let pressure_on = settings.gas_pressure_enabled && cs > 0.0;
     let upwind_on = settings.gas_pressure_upwind;
+    let advect_on = settings.gas_momentum_advection;
 
     // read-only BH mask — pass 3 mutates the grid, so it can't read neighbors off it
     let is_bh: Vec<Vec<Vec<bool>>> = grid.iter().map(|p| p.iter().map(|r| r.iter().map(|c| c.is_black_hole).collect()).collect()).collect();
@@ -385,6 +390,15 @@ pub fn apply_gas_momentum(grid: &mut Vec<Vec<Vec<Cell>>>, gas_velocity: &mut Vec
         });
     }
 
+    // Pre-gather density snapshot for the momentum gather (Pass 4): Pass 3
+    // overwrites matter_density, but the momentum update needs p = rho_OLD * v.
+    // Only allocated when momentum advection is on (~4 MB at 80^3).
+    let rho_old: Vec<Vec<Vec<f64>>> = if advect_on {
+        grid.iter().map(|p| p.iter().map(|r| r.iter().map(|c| c.matter_density).collect()).collect()).collect()
+    } else {
+        Vec::new()
+    };
+
     // Pass 3: gather. new = old − (outflow to non-BH neighbors) + (neighbors' inflow).
     grid.par_iter_mut().enumerate().for_each(|(h, plane)| {
         plane.iter_mut().enumerate().for_each(|(w, rowc)| {
@@ -423,4 +437,82 @@ pub fn apply_gas_momentum(grid: &mut Vec<Vec<Vec<Cell>>>, gas_velocity: &mut Vec
             });
         });
     });
+
+    // Pass 4 (gated on GAS_MOMENTUM_ADVECTION): carry momentum with the mass.
+    // Each parcel that left a cell in Pass 2 carries its source cell's velocity
+    // (donor-cell, consistent with the mass fluxes); the receiving cell gathers
+    // momentum p = rho_kept*v_old + sum(m_in * v_neighbor_old) and recovers
+    // v = p / rho_new. Mass aimed at a BH neighbor stayed with the source in
+    // Pass 3, and so does its momentum here (rho_kept uses the BH-masked sent),
+    // preserving the no-flux rip boundary. Conservative by construction: every
+    // unit of momentum sent is received by exactly one neighbor. Inflow from a
+    // BH or empty neighbor is automatically zero because such cells produced
+    // zero outflow in Pass 2. Reads vel_old (pre-advection snapshot) so the
+    // update is order-independent under par_iter.
+    if advect_on {
+        let vel_old = gas_velocity.clone();
+        let cells = &*grid; // holds rho_new after Pass 3; read-only here
+        gas_velocity.par_iter_mut().enumerate().for_each(|(h, plane)| {
+            plane.iter_mut().enumerate().for_each(|(w, rowv)| {
+                rowv.iter_mut().enumerate().for_each(|(d, v)| {
+                    if is_bh[h][w][d] {
+                        *v = [0.0; 3];
+                        return;
+                    }
+                    const RHO_FLOOR: f64 = 1e-12;
+                    let rho_new = cells[h][w][d].matter_density;
+                    if rho_new <= RHO_FLOOR {
+                        *v = [0.0; 3]; // no gas left -> no bulk velocity
+                        return;
+                    }
+                    let (hm, hp) = ((h + h_dim - 1) % h_dim, (h + 1) % h_dim);
+                    let (wm, wp) = ((w + w_dim - 1) % w_dim, (w + 1) % w_dim);
+                    let (dm, dp) = ((d + d_dim - 1) % d_dim, (d + 1) % d_dim);
+
+                    // mass this cell actually sent (BH-masked, same arithmetic as Pass 3)
+                    let mine = outflow[h][w][d];
+                    let mut sent = 0.0;
+                    if !is_bh[hm][w][d] {
+                        sent += mine[0];
+                    }
+                    if !is_bh[hp][w][d] {
+                        sent += mine[1];
+                    }
+                    if !is_bh[h][wm][d] {
+                        sent += mine[2];
+                    }
+                    if !is_bh[h][wp][d] {
+                        sent += mine[3];
+                    }
+                    if !is_bh[h][w][dm] {
+                        sent += mine[4];
+                    }
+                    if !is_bh[h][w][dp] {
+                        sent += mine[5];
+                    }
+
+                    let v_old = vel_old[h][w][d];
+                    let rho_kept = (rho_old[h][w][d] - sent).max(0.0); // >= (1-CFL)*rho_old
+                    let mut p = [rho_kept * v_old[0], rho_kept * v_old[1], rho_kept * v_old[2]];
+
+                    // inflow momentum: each arriving parcel carries its source's velocity
+                    let mut add = |m: f64, vn: &[f64; 3]| {
+                        p[0] += m * vn[0];
+                        p[1] += m * vn[1];
+                        p[2] += m * vn[2];
+                    };
+                    add(outflow[hp][w][d][0], &vel_old[hp][w][d]);
+                    add(outflow[hm][w][d][1], &vel_old[hm][w][d]);
+                    add(outflow[h][wp][d][2], &vel_old[h][wp][d]);
+                    add(outflow[h][wm][d][3], &vel_old[h][wm][d]);
+                    add(outflow[h][w][dp][4], &vel_old[h][w][dp]);
+                    add(outflow[h][w][dm][5], &vel_old[h][w][dm]);
+
+                    v[0] = p[0] / rho_new;
+                    v[1] = p[1] / rho_new;
+                    v[2] = p[2] / rho_new;
+                });
+            });
+        });
+    }
 }
