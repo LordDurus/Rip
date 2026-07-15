@@ -101,6 +101,75 @@ that, in a head-on collision, should leave the gas lagging the dark matter.
 
 ---
 
+## Bullet kick velocity — making the collision speed a derived quantity
+
+`BULLET_VELOCITY_MODE` selects where the collision speed comes from:
+
+| mode | source | status |
+|---|---|---|
+| 0 | `BULLET_INITIAL_VELOCITY` verbatim | a **tuned** free parameter (v=10 was found because v=7 left the clumps bound) |
+| 1 | derived from the box's own mass and separation | removes the tuning |
+| 2 | start at rest, let gravity accelerate | not implemented — needs a bigger box |
+
+**Mode 1.** Two bodies falling from rest at separation `r_start` reach, at separation
+`r_contact`, a relative speed set by energy conservation:
+
+    v_rel² = 2 G M (1/r_contact − 1/r_start)
+
+Each clump carries half the closing speed, so the per-side kick is `v_rel / 2`, scaled
+by `BULLET_VELOCITY_MULTIPLIER` (default 1.0 — no effect; a knob to reach for
+deliberately, not a hidden fudge). `r_start`, `r_contact` and `M` are **measured from
+the grid** at kick time, not read from the seeding settings, so the number is right
+whether the clumps were Gaussian-seeded or drifted first. `r_contact = σ_left + σ_right`
+(excess-weighted RMS radii; cores meeting) is a modeling choice and the most sensitive
+input, since it sets the `1/r` blow-up.
+
+Two corrections are required, and neither is optional:
+
+**Effective G.** `compute_gravity_fft` uses the raw integer mode index as the
+wavenumber (`get_wave_number` returns `i`, not `2πi/N`). Matching the sim's solve
+
+    φ̂ = −4πG ρ̂ / |m|²,   ĝ = −i m φ̂
+
+against a physically normalised solve (`k = 2πm/N`, cell spacing 1) gives
+`4πG = 2 G_eff N`, hence
+
+    G_eff = 2π G / N        (cubic grid only)
+
+So the gravity the sim *applies* is that of `G_eff`, not of `app_settings.gravity`. At
+N=80, `G_eff ≈ 0.0785 G` — ~12.7× smaller. Since `v ∝ √G`, using the raw setting would
+overstate the infall speed by ~3.6×. This is not a solver bug — it is a self-consistent
+rescaling absorbed into whatever `gravity` was tuned to — but it is fatal to any velocity
+derived analytically rather than by the solver. On a **non-cubic** grid the sim's `k²` is
+not proportional to the true `k²` at all, so mode 1 refuses to guess and falls back.
+
+**Only contrast gravitates.** The `k = 0` mode is zeroed (Jeans swindle), so the mean
+density exerts no force: what pulls the clumps together is each clump's **excess over the
+box mean**, not its total mass. Summing `(ρ − ρ̄)` over half-boxes is degenerate (it sums
+to zero over the whole box), so `M` is the sum of the **positive** excess only — the
+overdense material that actually attracts. `ρ = matter_density + rip_dimple`, i.e. exactly
+the source term handed to the Poisson solver, so `M` and `G` are the same accounting the
+gravity obeys.
+
+**Honest limits.** This is an idealised two-body number, not the true infall this periodic
+box would produce: periodic images pull each clump *backward* (so the derived `v` is an
+upper bound on gravity's own answer), and expansion works against the approach and is not
+in the formula. Mode 1 removes the *tuning*, not the *idealisation*. If the derived `v`
+leaves the clumps bound, that is a **real finding** — gravity from this separation cannot
+unbind them in this box — and it is the argument for mode 2 plus a bigger box, not a
+reason to reach for the multiplier.
+
+**Units caveat (open question).** `GRAVITY` is set to the SI value `6.674e-11` while
+density, length and time are arbitrary code units. The dimensionless gravitational
+strength that results is therefore very small, and mode 1's derived `v` is expected to be
+correspondingly tiny. If it is, that is not a formula error — it says self-gravity is
+numerically negligible for the gas in the current unit system, which would independently
+explain why passive infall never collides (30.0 → 25.5 cells over 7,000 steps). Calibrating
+the unit system (what is one cell in metres, one step in seconds, one density unit in
+kg·m⁻³?) is the prerequisite for gravity-derived velocities to mean anything.
+
+---
+
 ## Gas–dimple offset (collision diagnostic)
 
 Along the collision axis, project each field onto columns (sum over the other two

@@ -505,3 +505,63 @@ physics RNG is currently `thread_rng()` (grid/particle/in-loop draws), not seede
 **Status.** Design consolidated across the `NUM_RUNS`-removal discussion; `cell.black_hole_id`
 already exists as a placeholder counter. Parked: schema shovel-ready after gas once the
 identity/liveness question is resolved; spawn mechanic waits on determinism + Tier 2.
+
+## Gravity is numerically negligible in the current unit system; the v=7 "binding" was hydrodynamic, not gravitational
+
+<details>
+<summary>Mode 1 (infall) works correctly and revealed that self-gravity does essentially nothing to the gas as currently calibrated</summary>
+
+**Decision / finding.** `BULLET_VELOCITY_MODE = 1` correctly derives the collision
+velocity from the box's own mass and separation. On the first real mode-1 run it
+reported:
+
+    v = 0.0001 [DERIVED] -- M_excess=5.99e4 (lo 2.99e4 + hi 3.00e4),
+    r_start=29.87, r_contact=11.01, G=6.674e-11, G_eff=5.24e-12,
+    v_rel=0.0002; setting would have given 10.0000
+
+The derived infall velocity is ~1e-4 against a tuned setting of 10 -- a factor of
+~1e5. Every input is sane (two clean symmetric clumps, r_start matches the seeded
+~30, G_eff computed per 2*pi*G/N), so the formula is faithful: this is genuinely
+what the current physics produces.
+
+**Reason.** `GRAVITY` is set to the literal SI value 6.674e-11 while density,
+length and time are arbitrary code units. The resulting dimensionless
+gravitational strength is ~5 orders of magnitude too small to move the clumps
+over these timescales. This is not a bug in mode 1 -- it computed exactly what
+this G yields -- it is a statement about the unit calibration: as configured,
+self-gravity is a rounding error for the gas.
+
+**Consequence.** Three things follow, and they revise earlier conclusions:
+
+1. **The v=7 "binding" was NOT gravitational.** Earlier runs where the clumps
+   collided and rattled without separating were read as dark-matter mass
+   gravitationally recapturing them ("binding tension"). With gravity negligible,
+   that cannot be the mechanism. The rattling is HYDRODYNAMIC: gas piling up at
+   the collision interface (isothermal pressure) plus drag. What v=10 overcame
+   was the pressure wall at the interface, not a gravitational well. Any prior
+   draft attributing the binding to dark-matter mass is wrong and is superseded
+   by this entry.
+
+2. **It explains the standing "passive infall never collides" mystery.** 30.0 ->
+   25.5 cells over 7,000 steps, decelerating, was blamed on box size and periodic
+   images. The real cause is that gravity is off: the clumps drift slightly from
+   initial conditions and then sit, because there is no meaningful attraction. A
+   ~5-cell drift over 7,000 steps is consistent with a ~1e-4 velocity. It was
+   never a box problem.
+
+3. **It reframes what the dimple does dynamically.** The dimple gravitates through
+   the same Poisson solver with the same negligible G, so its gravitational pull
+   on the gas is also ~1e-5 weak. The observed clustering (r(dimple,baryon) rising
+   to ~0.9, dimple co-locating with structure) is therefore produced by the
+   TRANSPORT scheme following the gravity GRADIENT, not by gravity doing dynamical
+   work. The model is, in its current calibration, a transport-and-threshold model
+   rather than a gravitational-dynamics model. The morphology is real; the
+   dynamics behind it are advective, not gravitational.
+
+None of this invalidates the offset morphology, epoch structure, or expansion
+results -- none of those depend on strong gravity. But it clarifies what the sim
+is and is not doing, and it makes unit calibration (previously an academic
+caveat) the prerequisite for any gravity-derived quantity to mean anything. Until
+then, mode 0 (tuned velocity) remains the only mode that produces a collision,
+and its v is honestly an input, not a prediction.
+</details>

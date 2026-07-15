@@ -12,11 +12,20 @@ The template is only ever copied as a one-time bootstrap if rip_data.db does not
 exist yet (or you pass --bootstrap for a clean sweep DB). Per-value runs never
 reset. Each invocation produces exactly one run (the old NUM_RUNS loop is gone).
 
-Examples:
-    # the drag bracket, 1.5k steps each, appended to the current rip_data.db
-    py sweep_param.py --values 0.1 0.5 2.0 --timesteps 1500
+By default the sweep forces a t=0 collision (BULLET_KICK_RIP_RATE=0) so each
+run collides immediately and short --timesteps suffice. Minimum timesteps is
+set by the SLOWEST value: contact ~ initial_sep / (2*v*dt), plus roughly the
+same again for the post-pass crest. At v=3, dt=0.01, sep~30 that is ~1000-1500
+steps; faster values contact sooner. For a deliberate two-phase sweep pass
+--keep-kick-mode and long --timesteps (the kick fires only after the epoch
+cools, ~5k+).
 
-    # sweep a different key; pin momentum on; use the prebuilt binary (faster)
+Examples:
+    # collision-velocity sweep (t=0 kick), post-pass offset per value
+    py sweep_param.py --key BULLET_INITIAL_VELOCITY --values 3 6 9 12 \\
+        --timesteps 1500 --sim-cmd "target\\release\\rip.exe"
+
+    # sweep sound speed instead; pin momentum on
     py sweep_param.py --key GAS_SOUND_SPEED --values 1 2 4 \\
         --pin GAS_MOMENTUM_ENABLED=1 --sim-cmd "target\\release\\rip.exe"
 """
@@ -30,9 +39,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
 SCRIPTS = Path(__file__).resolve().parent
-TEMPLATE = REPO / "data" / "template.db"
 
 def find_root(start=None, marker="Cargo.toml"):
     p = Path(start or __file__).resolve()
@@ -40,8 +47,12 @@ def find_root(start=None, marker="Cargo.toml"):
         if (d / marker).exists():
             return d
     raise SystemExit(f"repo root not found: no {marker} at or above {p}")
+# Derive ALL repo paths from the resolved root, not from a fixed
+# parent.parent -- otherwise TEMPLATE points at the wrong place if the script
+# ever moves relative to the repo root (DB_PATH already did this correctly).
 REPO = find_root()
 DB_PATH = REPO / "data" / "rip_data.db"
+TEMPLATE = REPO / "data" / "template.db"
 OUTPUT_DIR = REPO / "output"
 
 
@@ -78,14 +89,23 @@ def invoke_sim(sim_cmd):
     return proc.returncode == 0, tail
 
 
-def firstpass_json(run_id, timesteps, stride, window):
-    """Run the offset diagnostic in --json mode and return the parsed dict."""
-    r = subprocess.run(
-        [sys.executable, str(SCRIPTS / "bullet_offset_firstpass.py"),
-         "--run-id", str(run_id), "--coarse-stride", str(stride),
-         "--max-timestep", str(timesteps), "--window", str(window),
-         "--no-plot", "--no-trajectory", "--json"],
-        cwd=str(SCRIPTS), capture_output=True, text=True)
+def firstpass_json(run_id, timesteps, stride, window, post_pass=True):
+    """Run the offset diagnostic in --json mode and return the parsed dict.
+
+    post_pass=True measures the offset at the aftermath re-separation crest
+    (where a Bullet offset is actually observable) rather than at closest
+    approach (where the gas cores overlap and the offset washes out). The
+    returned dict's "mode" field confirms which was used -- a sweep row
+    showing mode=closest_approach means no clean crest was found and the
+    number fell back, so read it with suspicion.
+    """
+    cmd = [sys.executable, str(SCRIPTS / "offset_firstpass.py"),
+           "--run-id", str(run_id), "--coarse-stride", str(stride),
+           "--max-timestep", str(timesteps), "--window", str(window),
+           "--no-plot", "--no-trajectory", "--json"]
+    if post_pass:
+        cmd.append("--post-pass")
+    r = subprocess.run(cmd, cwd=str(SCRIPTS), capture_output=True, text=True)
     for line in r.stdout.splitlines():
         if line.startswith("RESULT_JSON "):
             return json.loads(line[len("RESULT_JSON "):])
@@ -106,6 +126,14 @@ def main():
     ap.add_argument("--bootstrap", action="store_true",
                     help="copy template.db -> rip_data.db once before starting "
                          "(clean sweep DB). Otherwise append to the existing DB.")
+    ap.add_argument("--keep-kick-mode", action="store_true",
+                    help="do NOT force BULLET_KICK_RIP_RATE=0. By default the "
+                         "sweep pins a t=0 kick so each short run collides "
+                         "immediately; without this, a nonzero rate carried over "
+                         "in the DB would make every run a delayed-kick run that "
+                         "never fires in the sweep window (measuring pre-kick "
+                         "drift). Only pass this for a deliberate two-phase sweep "
+                         "with long --timesteps.")
     args = ap.parse_args()
 
     # Bootstrap only if asked, or if there's simply no DB to append to.
@@ -128,6 +156,12 @@ def main():
         try:
             set_setting(conn, args.key, value)
             set_setting(conn, "NUM_TIMESTEPS", args.timesteps)
+            # Force an immediate (t=0) collision for the sweep unless the
+            # user explicitly wants two-phase. Guards against a nonzero rate
+            # left in the DB by a prior run turning every sweep run into a
+            # delayed-kick that never fires in the short window.
+            if not args.keep_kick_mode and args.key != "BULLET_KICK_RIP_RATE":
+                set_setting(conn, "BULLET_KICK_RIP_RATE", "0")
             for k, v in pins.items():
                 set_setting(conn, k, v)
             # Drag is inert without the momentum pass -- warn rather than silently
@@ -184,19 +218,26 @@ def main():
         lo = r.get("left_offset", "?")
         ro = r.get("right_offset", "?")
         ovl = "YES" if r.get("overlap") else "no"
-        note = "fallback" if r.get("used_fallback") else ""
+        mode = r.get("mode", "?")
+        note = "closest!" if mode == "closest_approach" else "post-pass"
+        if r.get("used_fallback"):
+            note = "GLOBALMIN"
         print(f"{r['value']:>10} {r['run_id']:>4} {r.get('timestep','?'):>8} "
               f"{sep:>8} {lo:>9} {ro:>9} {ovl:>8} {note:>10}")
     print("-" * 92)
-    print("overlap=YES means min_sep < 2*window -> offsets are smeared (drop "
-          "--offset-window). Compare against the drag=0 baseline: a real lag is a")
-    print("direction-consistent gas-behind-dimple offset that persists past "
-          "closest approach, not the equal-and-opposite merge artifact.")
+    print("mode=post_pass is the aftermath re-separation crest (the real Bullet")
+    print("sampling point). mode=closest_approach means no clean crest was found")
+    print("and the row fell back to the overlapped collision -- treat its offset")
+    print("as unreliable. overlap=YES (sep < 2*window) even in post_pass means the")
+    print("clumps never cleanly separated: at low velocity they stay bound and")
+    print("rattle in place -- that is a physical NULL (slow collisions make no")
+    print("Bullet), not a window artifact. A real signature is a direction-")
+    print("consistent gas-behind-dimple offset that GROWS with collision velocity.")
 
     # --- CSV for later use ---
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     csv_path = OUTPUT_DIR / f"sweep_{args.key}.csv"
-    cols = ["value", "run_id", "status", "timestep", "separation",
+    cols = ["value", "run_id", "status", "mode", "timestep", "separation",
             "initial_separation", "left_offset", "right_offset", "window",
             "overlap", "used_fallback"]
     with open(csv_path, "w", newline="") as fh:

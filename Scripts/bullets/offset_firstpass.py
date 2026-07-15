@@ -18,20 +18,31 @@ timestep is clean. Method:
      collisionless dark-matter proxy). Gas lagging behind the dimple is the
      Bullet-Cluster signature.
 
+TWO-PHASE RUNS: when the collision is triggered by a delayed velocity kick
+(BULLET_KICK_RIP_RATE > 0), the real collision is at the logged kick
+timestep, NOT at the first separation minimum -- the clumps also drift
+together slightly under gravity BEFORE the kick, and the auto-search locks
+onto that pre-kick drift. This script reads the "BULLET KICK fired" log line
+and anchors the search AFTER it, so the reported approach is the real
+post-kick collision. A t=0-kick or no-kick run is unaffected (no kick line
+=> scans from the start, as before).
+
 IMPORTANT: the fixed midpoint col-split only tracks the original two clumps
 up to the first crossing. This script deliberately reads at / just before
 first closest approach for exactly that reason; offsets sampled after the
 clumps cross are meaningless with this split.
 
 Examples:
-    py bullet_offset_firstpass.py
-    py bullet_offset_firstpass.py --run-id 7 --coarse-stride 20 --window 8
-    py bullet_offset_firstpass.py --max-timestep 1800 --no-plot
+    py offset_firstpass.py
+    py offset_firstpass.py --run-id 7 --coarse-stride 20 --window 8
+    py offset_firstpass.py --max-timestep 1800 --no-plot
+    py offset_firstpass.py --scan-from 4760   # force anchor, ignore log
 """
 
 import argparse
 import json
 import os
+import re
 import sqlite3
 from pathlib import Path
 
@@ -70,6 +81,37 @@ def resolve_run_id(conn, requested):
     return row[0]
 
 
+def kick_timestep_from_log(conn, run_id):
+    """Return the timestep of the two-phase BULLET KICK, or None.
+
+    Reads the log line create_data emits when the delayed kick fires:
+      't=4760: BULLET KICK fired -- windowed rip rate ...'
+    Returns None for t=0-kick / no-kick runs (no such line), so those scan
+    from the start exactly as before. Introspects the log table so a schema
+    rename surfaces as 'no kick line found' rather than a crash.
+    """
+    tables = [r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")]
+    log_table = None
+    for t in tables:
+        cols = {r[1] for r in conn.execute(f"PRAGMA table_info({t})")}
+        if {"run_id", "message"} <= cols:
+            log_table = t
+            break
+    if log_table is None:
+        return None
+    rows = conn.execute(
+        f"SELECT message FROM {log_table} "
+        f"WHERE run_id = ? AND message LIKE '%BULLET KICK fired%' "
+        f"ORDER BY rowid LIMIT 1",
+        (run_id,),
+    ).fetchone()
+    if not rows:
+        return None
+    m = re.search(r"t=(\d+): BULLET KICK fired", rows[0])
+    return int(m.group(1)) if m else None
+
+
 def n_cols(conn):
     row = conn.execute("SELECT MAX(col) FROM cell_position").fetchone()
     if row is None or row[0] is None:
@@ -77,7 +119,7 @@ def n_cols(conn):
     return int(row[0]) + 1
 
 
-def candidate_timesteps(conn, run_id, max_timestep):
+def candidate_timesteps(conn, run_id, max_timestep, scan_from):
     # timestep_summary has one cheap row per timestep; authoritative list.
     rows = conn.execute(
         "SELECT timestep FROM timestep_summary WHERE run_id = ? ORDER BY timestep",
@@ -86,6 +128,8 @@ def candidate_timesteps(conn, run_id, max_timestep):
     if not rows:
         raise SystemExit(f"No timestep_summary rows for run_id={run_id}.")
     ts = [int(r[0]) for r in rows]
+    if scan_from is not None:
+        ts = [t for t in ts if t >= scan_from]
     if max_timestep is not None:
         ts = [t for t in ts if t <= max_timestep]
     if not ts:
@@ -239,6 +283,48 @@ def first_closest_approach_index(seps, approach_frac):
     return run_min_idx, False
 
 
+def first_post_pass_index(seps, closest_idx, min_recover):
+    """Index of the FIRST separation maximum after closest approach.
+
+    This is where a Bullet-Cluster offset is actually observed: not at the
+    collision (where the gas cores overlap and the centroid windows
+    contaminate each other), but in the AFTERMATH, once the collisionless
+    dark matter has sailed ahead and the gas has been left behind, so the
+    two components are cleanly separated again. In a bound periodic box the
+    clumps swing apart and back (an oscillation), so 'aftermath' is the
+    first local maximum of separation after the closest approach at
+    closest_idx.
+
+    Walk forward tracking a running maximum; stop once separation has
+    fallen back more than `min_recover` cells below that running max (the
+    far side of the re-separation peak). Same jitter-tolerant logic as the
+    approach walk, mirrored. Returns (index, found). found is False when no
+    clear re-separation was seen (clumps stayed merged, or the scan ended
+    before the peak) -- caller falls back to the closest-approach sample.
+    """
+    mags = [abs(s) for s in seps]
+    if closest_idx >= len(mags) - 1:
+        return closest_idx, False
+    run_max = mags[closest_idx]
+    run_max_idx = closest_idx
+    saw_rise = False
+    j = closest_idx
+    while j + 1 < len(mags):
+        j += 1
+        if mags[j] > run_max:
+            run_max = mags[j]
+            run_max_idx = j
+            saw_rise = True
+        elif saw_rise and mags[j] < run_max - min_recover:
+            # past the crest of the first re-separation peak
+            break
+    # Require a genuine peak (some rise happened) that isn't just the last
+    # sample -- otherwise the scan ended mid-rise and the 'max' is an
+    # artifact of truncation, not a real aftermath crest.
+    found = saw_rise and run_max_idx > closest_idx
+    return run_max_idx, found
+
+
 def refine(conn, run_id, ncol, window, timesteps, lo_t, hi_t):
     band = [t for t in timesteps if lo_t <= t <= hi_t]
     best = None
@@ -247,6 +333,20 @@ def refine(conn, run_id, ncol, window, timesteps, lo_t, hi_t):
         if m is None:
             continue
         if best is None or abs(m["separation"]) < abs(best["separation"]):
+            best = m
+    return best
+
+
+def refine_max(conn, run_id, ncol, window, timesteps, lo_t, hi_t):
+    """Like refine(), but returns the timestep of MAXIMUM |separation| in
+    the band -- the crest of the post-pass re-separation."""
+    band = [t for t in timesteps if lo_t <= t <= hi_t]
+    best = None
+    for t in band:
+        m = measure(conn, run_id, t, ncol, window)
+        if m is None:
+            continue
+        if best is None or abs(m["separation"]) > abs(best["separation"]):
             best = m
     return best
 
@@ -260,15 +360,17 @@ def fmt(v, nd=2):
 
 
 def report(best, coarse, ncol, window, stride, baseline, used_fallback,
-           show_trajectory=True):
+           anchor_t, anchor_source, show_trajectory=True, post_pass=False):
     print()
     print("=" * 64)
-    print("FIRST CLOSEST APPROACH")
+    print("POST-PASS RE-SEPARATION" if post_pass else "FIRST CLOSEST APPROACH")
     print("=" * 64)
     print(f"grid cols           : {ncol}  (split at col {ncol // 2})")
     print(f"centroid window      : +/-{window} cells around each clump peak")
     print(f"coarse stride        : {stride}")
     print(f"initial separation   : {baseline:.2f} cells")
+    if anchor_t is not None:
+        print(f"scan anchored at     : t>={anchor_t}  ({anchor_source})")
     print("-" * 64)
     if used_fallback:
         print("!! No clear first-pass approach found (separation never dropped")
@@ -294,9 +396,15 @@ def report(best, coarse, ncol, window, stride, baseline, used_fallback,
         print(f"!! separation ({sep:.1f}) < 2*window ({2 * window}): the two")
         print("   centroid windows overlap here, so each centroid is")
         print("   contaminated by the other clump and the offset is smeared.")
-        print(f"   Re-run with --window {max(1, int(sep // 2))} or read the")
-        print("   offset from the frames just BEFORE closest approach (plot/")
-        print("   trajectory below), where the clumps are still resolved.")
+        if post_pass:
+            print("   POST-PASS: even the re-separation crest is inside 2*window,")
+            print("   so the clumps never cleanly separate in this box -- this is")
+            print("   the box-size limit, not a window choice. A larger BOX (more")
+            print("   room to separate), not finer resolution, is what would help.")
+        else:
+            print(f"   Re-run with --window {max(1, int(sep // 2))}, use --post-pass")
+            print("   to measure the aftermath crest instead, or read the offset")
+            print("   from frames just BEFORE closest approach where clumps resolve.")
     crossed = best["separation"] < 0
     if crossed:
         print("!! centroids have CROSSED at this timestep (right is left of left).")
@@ -324,7 +432,7 @@ def _lag_word(offset):
     return "coincident with"
 
 
-def make_plot(coarse, best, run_id):
+def make_plot(coarse, best, run_id, anchor_t):
     try:
         import matplotlib
         matplotlib.use("Agg")
@@ -344,6 +452,9 @@ def make_plot(coarse, best, run_id):
     ax1.plot(ts, sep, color="steelblue", marker="o", ms=3, lw=1.3)
     ax1.axvline(best["timestep"], color="tomato", ls="--",
                 label=f"first closest approach (t={best['timestep']})")
+    if anchor_t is not None:
+        ax1.axvline(anchor_t, color="purple", ls=":", lw=1.2,
+                    label=f"kick / anchor (t={anchor_t})")
     ax1.set_ylabel("|clump separation| (cells)")
     ax1.legend(fontsize=9)
     ax1.grid(True, alpha=0.3)
@@ -354,6 +465,8 @@ def make_plot(coarse, best, run_id):
              label="right clump gas-dimple offset")
     ax2.axhline(0, color="gray", lw=0.8)
     ax2.axvline(best["timestep"], color="tomato", ls="--")
+    if anchor_t is not None:
+        ax2.axvline(anchor_t, color="purple", ls=":", lw=1.2)
     ax2.set_xlabel("timestep")
     ax2.set_ylabel("gas - dimple (cells)")
     ax2.legend(fontsize=9)
@@ -383,10 +496,29 @@ def main():
                              "each clump peak (default: 8).")
     parser.add_argument("--max-timestep", type=int, default=None,
                         help="Only scan timesteps <= this (default: all).")
+    parser.add_argument("--scan-from", type=int, default=None,
+                        help="Force the scan to start at this timestep, ignoring "
+                             "the auto-detected kick time. Use to override the "
+                             "log-derived anchor (default: auto from BULLET KICK "
+                             "log line, else start of run).")
+    parser.add_argument("--no-kick-anchor", action="store_true",
+                        help="Ignore the BULLET KICK log line and scan the whole "
+                             "run (pre-two-phase behavior).")
     parser.add_argument("--approach-frac", type=float, default=0.6,
                         help="A real approach is registered only once separation "
                              "drops below this fraction of its initial value; "
                              "rejects pre-collision plateau noise (default: 0.6).")
+    parser.add_argument("--post-pass", action="store_true",
+                        help="Report the offset at the first separation MAXIMUM "
+                             "after the collision (the aftermath re-separation, "
+                             "where a Bullet offset is actually observed) instead "
+                             "of at closest approach. At closest approach the gas "
+                             "cores overlap and the centroid windows contaminate "
+                             "each other; post-pass they are cleanly resolved.")
+    parser.add_argument("--recover", type=float, default=3.0,
+                        help="Cells of separation drop past the re-separation "
+                             "crest before the post-pass walk stops (jitter "
+                             "margin; default: 3).")
     parser.add_argument("--no-plot", action="store_true",
                         help="Skip writing the diagnostic PNG.")
     parser.add_argument("--no-trajectory", action="store_true",
@@ -405,7 +537,35 @@ def main():
     try:
         run_id = resolve_run_id(conn, args.run_id)
         ncol = n_cols(conn)
-        timesteps = candidate_timesteps(conn, run_id, args.max_timestep)
+
+        # Anchor resolution: explicit --scan-from wins; else auto from the
+        # BULLET KICK log line (two-phase collision); else None (scan whole
+        # run, exactly as before). This is the fix for two-phase runs where the
+        # real collision is at the kick, not the pre-kick gravitational drift.
+        anchor_t = None
+        anchor_source = ""
+        if args.scan_from is not None:
+            anchor_t = args.scan_from
+            anchor_source = "forced via --scan-from"
+        elif not args.no_kick_anchor:
+            kt = kick_timestep_from_log(conn, run_id)
+            if kt is not None:
+                anchor_t = kt
+                anchor_source = "auto from BULLET KICK log line"
+                print(f"Two-phase run: anchoring scan at kick timestep t={kt} "
+                      f"(from log).")
+
+        # If an anchor sits beyond max_timestep, the anchor wins -- a two-phase
+        # collision after the requested window is still the event of interest,
+        # and silently scanning pre-kick drift would resurrect the bug. Widen
+        # the effective ceiling to the run end in that case.
+        max_ts = args.max_timestep
+        if anchor_t is not None and max_ts is not None and anchor_t > max_ts:
+            print(f"  (--max-timestep {max_ts} precedes the kick; ignoring it so "
+                  "the post-kick collision is in range.)")
+            max_ts = None
+
+        timesteps = candidate_timesteps(conn, run_id, max_ts, anchor_t)
         print(f"Scanning {len(timesteps)} timesteps "
               f"(coarse stride {args.coarse_stride}) on a {ncol}-col axis...")
 
@@ -422,19 +582,46 @@ def main():
         best = refine(conn, run_id, ncol, args.window, timesteps, lo_t, hi_t)
         if best is None:
             best = coarse[i]
+
+        # Post-pass mode: from the closest approach, walk forward to the
+        # first separation maximum (aftermath re-separation) and report the
+        # offset THERE. This is the physically correct Bullet sampling point
+        # -- closest approach is where the gas cores overlap most and the
+        # centroid windows contaminate each other, which is why --window 8
+        # and --window 3 both reported overlap at the same collision.
+        post_pass_used = False
+        if args.post_pass:
+            pi, found = first_post_pass_index(seps, i, args.recover)
+            if found:
+                plo = coarse[max(0, pi - 1)]["timestep"]
+                phi = coarse[min(len(coarse) - 1, pi + 1)]["timestep"]
+                print(f"Post-pass mode: re-separation crest bracketed in "
+                      f"[{plo}, {phi}]; refining for maximum separation...")
+                pbest = refine_max(conn, run_id, ncol, args.window,
+                                   timesteps, plo, phi)
+                if pbest is not None:
+                    best = pbest
+                    post_pass_used = True
+            if not post_pass_used:
+                print("Post-pass mode: no clean re-separation found after the "
+                      "collision (clumps stayed merged or the scan ended before "
+                      "the crest). Falling back to closest-approach offset.")
     finally:
         conn.close()
 
     report(best, coarse, ncol, args.window, args.coarse_stride,
-           baseline, used_fallback, show_trajectory=not args.no_trajectory)
+           baseline, used_fallback, anchor_t, anchor_source,
+           show_trajectory=not args.no_trajectory, post_pass=post_pass_used)
 
     if args.json:
         sep = abs(best["separation"])
         print("RESULT_JSON " + json.dumps({
             "run_id": run_id,
+            "mode": "post_pass" if post_pass_used else "closest_approach",
             "timestep": best["timestep"],
             "separation": round(sep, 3),
             "initial_separation": round(baseline, 3),
+            "anchor_timestep": anchor_t,
             "left_offset": (None if best["left_offset"] is None
                             else round(best["left_offset"], 3)),
             "right_offset": (None if best["right_offset"] is None
@@ -445,7 +632,7 @@ def main():
         }))
 
     if not args.no_plot:
-        make_plot(coarse, best, run_id)
+        make_plot(coarse, best, run_id, anchor_t)
 
 
 if __name__ == "__main__":
